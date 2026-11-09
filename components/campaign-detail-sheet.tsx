@@ -1,14 +1,17 @@
 "use client"
 
-import { useState } from "react"
-import { X, Plus, ExternalLink, Trash2, Sparkles } from "lucide-react"
+import { useEffect, useState } from "react"
+import { X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
-import { updateCampaignClient, deleteCampaignClient, createContentItemClient, moveContentItemsClient } from "@/lib/data-client"
+import {
+  updateCampaignClient, deleteCampaignClient, createContentItemClient, moveContentItemsClient,
+  createCampaignClient, createContentItemsClient,
+} from "@/lib/data-client"
 import type { CampaignWithItems, ContentItemWithCampaign, CampaignMotion, CampaignType } from "@/lib/database.types"
 import {
   MOTION_OPTIONS, TYPE_OPTIONS, PRODUCT_OPTIONS, campaignColor,
-  CHANNEL_ICONS, STATUS_COLORS, NO_CAMPAIGN_ID
+  CHANNEL_ICONS, STATUS_COLORS, NO_CAMPAIGN_ID, parseDateString, toISODate,
 } from "@/lib/database.types"
 import { ContentItemDialog } from "@/components/content-item-dialog"
 import { Button, Field, OptionCard, Section, SegmentedControl, fieldCls, textareaCls } from "@/components/kit"
@@ -23,10 +26,19 @@ import { GenerateItemsDialog } from "@/components/generate-items-dialog"
 interface Props {
   campaign: CampaignWithItems
   onClose: () => void
+  /** Switch the sheet to another campaign (used to open a fresh duplicate) */
+  onOpenCampaign?: (id: string) => void
 }
 
-export function CampaignDetailSheet({ campaign, onClose }: Props) {
-  const { profiles, setCampaigns, campaigns } = useStore()
+/** Shift a YYYY-MM-DD date by whole days */
+function shiftDate(date: string, days: number): string {
+  const d = parseDateString(date)
+  d.setDate(d.getDate() + days)
+  return toISODate(d)
+}
+
+export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props) {
+  const { profiles, setCampaigns, campaigns, currentUser } = useStore()
   const { refreshCampaigns } = useRefreshData()
   const isEditor = useIsEditor()
 
@@ -38,6 +50,8 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
   const [endDate,   setEndDate]   = useState(campaign.end_date || "")
   const [saving,    setSaving]    = useState(false)
   const [selectedItem, setSelectedItem] = useState<ContentItemWithCampaign | null>(null)
+  /** A just-duplicated item to open as soon as it shows up in the refreshed campaign */
+  const [openWhenLoaded, setOpenWhenLoaded] = useState<string | null>(null)
   const [newItemOpen,  setNewItemOpen]  = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [confirmDel,   setConfirmDel]   = useState(false)
@@ -49,6 +63,12 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
   const [moveError,   setMoveError]   = useState("")
 
   const items        = campaign.items || []
+
+  useEffect(() => {
+    if (!openWhenLoaded) return
+    const copy = items.find(i => i.id === openWhenLoaded)
+    if (copy) { setSelectedItem(copy); setOpenWhenLoaded(null) }
+  }, [items, openWhenLoaded])
   const allSelected  = items.length > 0 && selectedIds.size === items.length
   const someSelected = selectedIds.size > 0
   const otherCampaigns = campaigns.filter(c => c.id !== NO_CAMPAIGN_ID && c.id !== campaign.id)
@@ -89,6 +109,73 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
     }
   }
 
+  // ── Duplicate the whole campaign, moved to a new start date ──
+  // Every item keeps its spacing: if the copy starts 4 weeks later, so does each item.
+  const firstItemDate = items.map(i => i.publish_date).filter((d): d is string => !!d).sort()[0] ?? null
+  const originalStart = campaign.start_date ?? firstItemDate
+  const [dupOpen, setDupOpen]       = useState(false)
+  const [dupStart, setDupStart]     = useState("")
+  const [duplicating, setDuplicating] = useState(false)
+  const [dupError, setDupError]     = useState("")
+
+  const openDuplicate = () => {
+    // Suggest the same start a month later, or today if the campaign has no dates
+    setDupStart(originalStart ? shiftDate(originalStart, 28) : toISODate(new Date()))
+    setDupError("")
+    setDupOpen(true)
+  }
+
+  const handleDuplicate = async () => {
+    setDuplicating(true); setDupError("")
+    try {
+      const offset = originalStart && dupStart
+        ? Math.round((parseDateString(dupStart).getTime() - parseDateString(originalStart).getTime()) / 86400000)
+        : 0
+      const move = (d: string | null) => (d ? shiftDate(d, offset) : null)
+      const copy = await createCampaignClient({
+        title: `${campaign.title} (copy)`,
+        description: campaign.description,
+        category: campaign.category,
+        lead_id: campaign.lead_id,
+        icon_label: campaign.icon_label,
+        icon_color: campaign.icon_color,
+        status: "Active",
+        type: campaign.type,
+        motion: campaign.motion,
+        product: campaign.product,
+        objective: campaign.objective,
+        start_date: campaign.start_date ? move(campaign.start_date) : (originalStart ? dupStart : null),
+        end_date: move(campaign.end_date),
+      })
+      // The copy is new work: everything starts as Planned (ideas stay ideas), no live links, no comments
+      await createContentItemsClient(items.map(it => ({
+        campaign_id: copy.id,
+        title: it.title,
+        format: it.format,
+        channel: it.channel,
+        status: it.status === "Idea" ? "Idea" : "Planned",
+        assignee_id: it.assignee_id,
+        publish_date: move(it.publish_date),
+        date_confidence: it.date_confidence,
+        content_role: it.content_role,
+        contributors: it.contributors,
+        audience_segments: it.audience_segments ?? [],
+        notes: it.notes,
+        brief_url: it.brief_url,
+        live_url: null,
+        sort_order: it.sort_order,
+        created_by: currentUser?.id ?? null,
+      })))
+      await refreshCampaigns()
+      setDupOpen(false)
+      if (onOpenCampaign) onOpenCampaign(copy.id)
+    } catch (e) {
+      setDupError(e instanceof Error ? e.message : "Couldn't duplicate the campaign")
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   const handleDelete = async () => {
     await deleteCampaignClient(campaign.id)
     refreshCampaigns()
@@ -111,6 +198,11 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
             <h2 className="text-[22px] text-on-surface truncate">{title || "Campaign"}</h2>
           </div>
           <div className="flex items-center gap-1">
+            {isEditor && campaign.id !== NO_CAMPAIGN_ID && (
+              <Button variant="ghost" size="sm" onClick={openDuplicate}>
+                <Copy className="h-3.5 w-3.5" /> Duplicate
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => setConfirmDel(true)} aria-label="Delete campaign" className="hover:text-error hover:bg-error-container">
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -282,6 +374,31 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
           </div>
         </div>
 
+        {/* Duplicate campaign */}
+        {dupOpen && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]">
+            <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full flex flex-col gap-4 shadow-2xl">
+              <h3 className="text-base font-bold text-on-surface">Duplicate campaign</h3>
+              <p className="text-sm text-on-surface-variant">
+                Copies &ldquo;{campaign.title}&rdquo; and its {items.length} item{items.length === 1 ? "" : "s"} into a new campaign.
+                Everything starts as Planned; comments and live links aren&apos;t copied.
+              </p>
+              {originalStart && (
+                <Field label="New start date" hint={`The original starts ${parseDateString(originalStart).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}. Every item moves by the same amount.`}>
+                  <input type="date" value={dupStart} onChange={e => setDupStart(e.target.value)} className={fieldCls} />
+                </Field>
+              )}
+              {dupError && <p className="text-sm text-error">{dupError}</p>}
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setDupOpen(false)}>Cancel</Button>
+                <Button onClick={handleDuplicate} disabled={duplicating || (!!originalStart && !dupStart)}>
+                  {duplicating ? "Duplicating…" : "Duplicate"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Delete confirm */}
         {confirmDel && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]">
@@ -300,9 +417,11 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
       {/* Content item dialogs */}
       {selectedItem && (
         <ContentItemDialog
+          key={selectedItem.id}
           item={selectedItem}
           open={!!selectedItem}
           onOpenChange={open => { if (!open) setSelectedItem(null) }}
+          onDuplicated={setOpenWhenLoaded}
         />
       )}
       {newItemOpen && (

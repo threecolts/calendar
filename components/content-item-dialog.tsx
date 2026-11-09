@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { X, ExternalLink, Trash2, MessageCircle } from "lucide-react"
+import { X, ExternalLink, Trash2, MessageCircle, Copy } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import {
   updateContentItemClient, deleteContentItemClient, createContentItemClient, notifyTeamClient,
@@ -32,6 +32,8 @@ interface Props {
   onOpenChange: (open: boolean) => void
   defaultDate?: string
   defaultCampaignId?: string
+  /** Called with the new item's id after Duplicate, so the parent can open the copy. Without it the dialog just closes. */
+  onDuplicated?: (id: string) => void
 }
 
 const EMPTY_FORM = {
@@ -51,7 +53,7 @@ const EMPTY_FORM = {
 const FieldLabel = Label
 const selectCls = () => fieldCls
 
-export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defaultCampaignId }: Props) {
+export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defaultCampaignId, onDuplicated }: Props) {
   const { profiles, campaigns, currentUser } = useStore()
   const isEditor = useIsEditor()
   const { refreshCampaigns } = useRefreshData()
@@ -84,6 +86,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
   const [contributors, setContribs]   = useState<Contributor[]>((item as any)?.contributors ?? [])
   const [segments, setSegments]       = useState<string[]>(item?.audience_segments ?? [])
   const [saving, setSaving]           = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
   const [error, setError]             = useState("")
   const [confirmDel, setConfirmDel]   = useState(false)
   const [newCampaignOpen, setNewCampaignOpen] = useState(false)
@@ -177,6 +180,42 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
       setError(e instanceof Error ? e.message : "Failed to save item")
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Copy what's on screen into a new item on the same day. A copy of a
+  // published piece starts again as Planned, without the live link.
+  const handleDuplicate = async () => {
+    if (!item) return
+    setError("")
+    setDuplicating(true)
+    try {
+      const published = form.status === "Published"
+      const created = await createContentItemClient({
+        campaign_id: campaignId || null,
+        title: `${form.title.trim() || item.title} (copy)`,
+        status: published ? "Planned" : form.status,
+        format: form.format,
+        channel: form.channel,
+        assignee_id: form.assignee_id,
+        publish_date: form.publish_date || null,
+        date_confidence: form.date_confidence,
+        content_role: form.content_role || null,
+        notes: form.notes || null,
+        brief_url: form.brief_url || null,
+        live_url: published ? null : form.live_url || null,
+        contributors,
+        ...(segments.length > 0 ? { audience_segments: segments } : {}),
+        sort_order: item.sort_order + 1,
+        created_by: currentUser?.id ?? null,
+      })
+      await refreshCampaigns()
+      if (onDuplicated) onDuplicated(created.id)
+      else handleClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to duplicate item")
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -560,9 +599,14 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
               <ErrorText>{error}</ErrorText>
               <div className="flex justify-between items-center">
                 {!isNew ? (
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmDel(true)} className="text-error hover:text-error hover:bg-error-container -ml-2">
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </Button>
+                  <div className="flex items-center gap-1 -ml-2">
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmDel(true)} className="text-error hover:text-error hover:bg-error-container">
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleDuplicate} disabled={duplicating || saving}>
+                      <Copy className="h-3.5 w-3.5" /> {duplicating ? "Duplicating…" : "Duplicate"}
+                    </Button>
+                  </div>
                 ) : (
                   <label className="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none">
                     <input
