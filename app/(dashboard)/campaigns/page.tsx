@@ -131,7 +131,7 @@ export default function CampaignsPage() {
       )}
 
       {selected && (
-        <CampaignDetailSheet campaign={selected} onClose={() => setSelectedId(null)} />
+        <CampaignDetailSheet key={selected.id} campaign={selected} onClose={() => setSelectedId(null)} onOpenCampaign={setSelectedId} />
       )}
       <CreateCampaignDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
