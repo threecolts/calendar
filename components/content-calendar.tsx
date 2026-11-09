@@ -160,6 +160,8 @@ export function ContentCalendar() {
 
   // dialogs
   const [selectedItem, setSelectedItem] = useState<ContentItemWithCampaign | null>(null)
+  /** A just-duplicated item to open as soon as it shows up in the refreshed data */
+  const [openWhenLoaded, setOpenWhenLoaded] = useState<string | null>(null)
   const [newItemDate,  setNewItemDate]   = useState<string | null>(null)
   const [importOpen,   setImportOpen]    = useState(false)
   const [exportOpen,   setExportOpen]    = useState(false)
@@ -180,6 +182,13 @@ export function ContentCalendar() {
     campaigns.flatMap(c =>
       (c.items || []).map(item => ({ ...item, campaign: c }))
     ), [campaigns])
+
+  // After Duplicate, swap the open dialog over to the new copy once it's loaded
+  useEffect(() => {
+    if (!openWhenLoaded) return
+    const copy = allItems.find(i => i.id === openWhenLoaded)
+    if (copy) { setSelectedItem(copy); setOpenWhenLoaded(null) }
+  }, [allItems, openWhenLoaded])
 
   // ── deep link: /?item=<id> (from a notification) opens that item ─────────
 
@@ -766,9 +775,11 @@ export function ContentCalendar() {
       {/* Dialogs */}
       {selectedItem && (
         <ContentItemDialog
+          key={selectedItem.id}
           item={selectedItem}
           open={!!selectedItem}
           onOpenChange={open => { if (!open) setSelectedItem(null) }}
+          onDuplicated={setOpenWhenLoaded}
         />
       )}
       {newItemDate !== null && (

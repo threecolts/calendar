@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, Plus, ExternalLink, Trash2, Sparkles } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
@@ -38,6 +38,8 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
   const [endDate,   setEndDate]   = useState(campaign.end_date || "")
   const [saving,    setSaving]    = useState(false)
   const [selectedItem, setSelectedItem] = useState<ContentItemWithCampaign | null>(null)
+  /** A just-duplicated item to open as soon as it shows up in the refreshed campaign */
+  const [openWhenLoaded, setOpenWhenLoaded] = useState<string | null>(null)
   const [newItemOpen,  setNewItemOpen]  = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [confirmDel,   setConfirmDel]   = useState(false)
@@ -49,6 +51,12 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
   const [moveError,   setMoveError]   = useState("")
 
   const items        = campaign.items || []
+
+  useEffect(() => {
+    if (!openWhenLoaded) return
+    const copy = items.find(i => i.id === openWhenLoaded)
+    if (copy) { setSelectedItem(copy); setOpenWhenLoaded(null) }
+  }, [items, openWhenLoaded])
   const allSelected  = items.length > 0 && selectedIds.size === items.length
   const someSelected = selectedIds.size > 0
   const otherCampaigns = campaigns.filter(c => c.id !== NO_CAMPAIGN_ID && c.id !== campaign.id)
@@ -300,9 +308,11 @@ export function CampaignDetailSheet({ campaign, onClose }: Props) {
       {/* Content item dialogs */}
       {selectedItem && (
         <ContentItemDialog
+          key={selectedItem.id}
           item={selectedItem}
           open={!!selectedItem}
           onOpenChange={open => { if (!open) setSelectedItem(null) }}
+          onDuplicated={setOpenWhenLoaded}
         />
       )}
       {newItemOpen && (
