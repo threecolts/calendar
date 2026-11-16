@@ -63,7 +63,7 @@ export function copyFields(plan: SocialPlan): { where: string; field: string; te
   for (const opt of plan.options) {
     opt.slides.forEach((s, i) => {
       const where = opt.slides.length > 1 ? `Option ${opt.option}, card ${i + 1}` : `Option ${opt.option}`
-      for (const field of ["headline", "sub", "eyebrow", "prompt", "cta"] as const) {
+      for (const field of ["headline", "sub", "eyebrow", "prompt"] as const) {
         const v = s[field]
         if (v) out.push({ where, field, text: v })
       }
@@ -100,7 +100,6 @@ export function runChecks(plan: SocialPlan, briefText: string): CheckIssue[] {
       const where = opt.slides.length > 1 ? `Option ${opt.option}, card ${i + 1}` : `Option ${opt.option}`
       if (!h) issues.push({ severity: "error", where, message: "Headline is empty." })
       else if (!/[.?!]["”’)]?$/.test(h)) issues.push({ severity: "error", where, message: `Headline doesn't end with a full stop: "${h}"` })
-      if (s.cta && /\.$/.test(s.cta.trim())) issues.push({ severity: "error", where: `${where} CTA`, message: "CTAs are Title Case with no full stop." })
     })
   }
 

@@ -20,7 +20,7 @@ Products, named exactly: **Seller 365** (subscription with the tools and AI Oper
 
 Plain commercial truths about how marketplaces actually work, from a smart colleague who respects your time. Decisive (never "can help"), operator-credible (name the platform, the system, the number), restrained (say less, make it specific).
 
-- Headlines: sentence case, end with a full stop. CTAs: Title Case, no full stop ("Start Free Trial").
+- Headlines: sentence case, end with a full stop. CTAs: Title Case, no full stop ("Start Free Trial"), and only in captions, never as a button on the image.
 - Don't give documents feelings, don't assign intent, don't say "only we". State the mechanism.
 - **Banned:** operating system, tool, helper, unlock, empower, game-changer, landscape, headaches, seamless, best-in-class.
 - Vocabulary: *recovery* for 1P vendors, *reimbursements* for 3P sellers. Margin frame: margin leaks across the chain; we find it and get it back.

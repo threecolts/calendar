@@ -9,7 +9,7 @@
 
 Defaults if the brief doesn't say: single posts in `portrait` + `square`, with `story` for the strongest option; carousels in `portrait`; add `landscape` when X or LinkedIn is named.
 
-**Carousels:** 3–8 cards. Cover = photo (full-bleed) with the promise. Interior = one point per card, usually `type` cards. Last card = `close` with the CTA. Keep the same canvas (light or dark) for all interior cards. Number cards in the copy only if the content really is a sequence.
+**Carousels:** 3–8 cards. Cover = photo (full-bleed) with the promise. Interior = one point per card, usually `type` cards. Last card = `close`: a closing line, no button (the CTA lives in the caption). Keep the same canvas (light or dark) for all interior cards. Number cards in the copy only if the content really is a sequence.
 
 ## The spec file (`work/week.json`)
 
@@ -27,7 +27,7 @@ Defaults if the brief doesn't say: single posts in `portrait` + `square`, with `
          "headline": "**Ask before you buy.** Not after.",
          "sub": "", "formats": ["portrait", "square", "story"]},
         {"option": "B", "layout": "framed", "photo": "photos/012.jpg", "headline": "…", "sub": "…", "formats": ["portrait"]},
-        {"option": "C", "layout": "type", "dark": true, "headline": "…", "prompt": "…", "cta": "Try AI Operator", "formats": ["portrait"]}
+        {"option": "C", "layout": "type", "dark": true, "headline": "…", "prompt": "…", "formats": ["portrait"]}
       ]
     },
     {
@@ -35,13 +35,13 @@ Defaults if the brief doesn't say: single posts in `portrait` + `square`, with `
       "options": [{"option": "A", "formats": ["portrait"], "slides": [
         {"layout": "fullbleed", "photo": "photos/020.jpg", "headline": "…"},
         {"layout": "type", "headline": "…", "sub": "…"},
-        {"layout": "close", "headline": "…", "cta": "Start Free Trial"}
+        {"layout": "close", "headline": "…", "sub": "…"}
       ]}]
     }
   ]
 }
 ```
 
-Fields: `layout` (fullbleed, framed, type, close) · `photo` (path relative to the spec) · `focus` (CSS background-position) · `headline` (`**…**` for the bold phrase) · `sub` · `eyebrow` (uppercase label; use rarely, only to name a card's function, e.g. "Question two") · `prompt` (chat bubble) · `stat` `{"value": "30,000+", "label": "SELLERS"}` (only with a confirmed number) · `cta` · `dark` (graphite canvas for framed/type/close) · `anchor: "bottom"` (type cards: text at the bottom) · `mark: true` (outline 3 behind a type card) · `logo: true` (only when the brief asks) · `product` (ai-operator, seller-365, threecolts) · `debug_safe: true` (shows the story safe zone).
+Fields: `layout` (fullbleed, framed, type, close) · `photo` (path relative to the spec) · `focus` (CSS background-position) · `headline` (`**…**` for the bold phrase) · `sub` · `eyebrow` (uppercase label; use rarely, only to name a card's function, e.g. "Question two") · `prompt` (chat bubble) · `stat` `{"value": "30,000+", "label": "SELLERS"}` (only with a confirmed number, and for data, never for a discount) · `cta` (supported by the renderer but not used: no buttons on posts, see look.md) · `dark` (graphite canvas for framed/type/close) · `anchor: "bottom"` (type cards: text at the bottom) · `mark: true` (outline 3 behind a type card) · `logo: true` (only when the brief asks) · `product` (ai-operator, seller-365, threecolts) · `debug_safe: true` (shows the story safe zone).
 
 Files come out as `<post>_<option>_<layout>_<format>.png` and `<post>_<option>_carousel_<format>_02of05.png`.

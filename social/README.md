@@ -43,7 +43,7 @@ After each week, add any lasting feedback to `system/do-and-dont.md` (Claude wri
 
 The calendar app runs this system itself, so Angela doesn't need claude.ai or the zip. It lives in **Lab → Social posts**, and nothing there changes the calendar for anyone else.
 
-**How Angela uses it:** pick a calendar entry → paste the brief or upload the Doc as a .docx → choose platforms and post type → *Write three options* (Claude reads the Doc and the rules files here) → upload a photo for each photo slot, using the Unsplash search terms shown → *Render* → approve one option, edit captions → *Download zip* (same layout as `code/package.py`).
+**How Angela uses it:** pick a calendar entry → paste the brief or upload the Doc as a .docx → choose platforms and post type → *Write three options*. The app then runs the rest with no manual steps: Claude writes the options and captions, photos are found on Unsplash and picked, and every size is rendered. She approves one option, edits captions if needed, and downloads the zip (same layout as `code/package.py`). Per photo she can *Find another* or *Upload my own*.
 
 **Where things are**
 
@@ -56,14 +56,29 @@ The calendar app runs this system itself, so Angela doesn't need claude.ai or th
 | `lib/social/package.ts` | `captions.md`, `photo-credits.md`, `README.txt` and the zip |
 | `app/api/social/route.ts` | API for the tab |
 | `components/social-studio.tsx` | The tab |
+| `lib/social/unsplash.ts` | Unsplash search, filters, download tracking (port of `code/later/unsplash.py`) |
+| `lib/social/photos.ts` | Photo picking: Jev term scores → search → Jev stock filter → Claude visual pick, two rounds at most |
 | `scripts/010_social_posts.sql` | `social_posts` table and the private `social` storage bucket |
 
 **Setup**
 1. Run `scripts/010_social_posts.sql` in the Supabase SQL editor.
-2. `ANTHROPIC_API_KEY` must be set (already used by the Lab). `ANTHROPIC_MODEL` picks the writer model (default Claude Sonnet 5.5).
+2. `ANTHROPIC_API_KEY` must be set (already used by the Lab). `ANTHROPIC_MODEL` picks the writer model (default Claude Sonnet 5.5). `UNSPLASH_ACCESS_KEY` turns on photo picking (`UNSPLASH_API_KEY` also works). `JEV_API_KEY` runs the filters on Jev; without it Claude Haiku stands in.
 3. The brief: Threecolts Docs can't be shared publicly, so Angela pastes the Doc's text or uploads it as a .docx (File → Download → Microsoft Word). The .docx is read in her browser (`lib/social/docx.ts`). If an entry's Doc link happens to be public and the box is empty, the app reads the link instead.
 4. Rendering needs about 1.6 GB of function memory on Vercel (Chromium).
 
 **Check the renderer:** `npx tsx scripts/social-render-demo.mts` renders `examples/demo-week/week.json` through the app's renderer and compares each frame with the reference renders from `code/render.py` (about 1% of pixels differ, all text anti-aliasing).
 
-**Not built yet** (BUILD-SPEC build order 4–6): Unsplash search and download (`UNSPLASH_ACCESS_KEY`, production approval), Jev gates on search terms and results, Claude's visual photo pick and self-review of renders. Until then, photos are uploaded by hand — the fallback the spec says must always work.
+**Photo picking, per photo slot** (`lib/social/photos.ts`):
+1. Jev scores each of Claude's search terms. Question `t<n>`, type `score` 1–3: 1 generic stock, 2 somewhat specific, 3 specific person-action-place-light. The best three (score ≥ 2 first) are searched.
+2. Unsplash search: `orientation=portrait`, `content_filter=high`, 30 per term, merged and de-duplicated. Dropped: Unsplash+ (`premium`/`plus`, TO-CONFIRM TC-04) and anything under 2400 px on the long side. Photos already used in the post are excluded.
+3. Jev reads the first 24 candidates' metadata (description, alt text, tags, query; Jev doesn't see images). Per candidate: `s<n>`, `score` 1–3 (candid documentary / neutral / staged corporate stock), and `b<n>`, `choice` Yes/No ("shows the moment described in the post"). Ranked by P(on brief) − 0.35 × (stock − 1); the top 12 go to Claude. Answers and probabilities are stored per slot in `social_posts.plan.photo_log`, to tune the levels later.
+4. Claude sees the 12 photos (640 px) with the post's copy and `photography.md`, and returns a pick, a `focus`, a reason and one line per rejection, or three new terms. Two rounds at most; then the slot is left for a manual upload.
+
+**Unsplash API guidelines:**
+- *Hotlinking:* the app shows thumbnails from `urls.small` and renders from `urls.raw` (2400 px); it never re-hosts the original photo. Only the rendered posts are stored.
+- *Download tracking:* `links.download_location` is called (with the key) for every photo picked.
+- *Attribution:* "Photo by <name> on Unsplash" with `utm_source=threecolts_content_calendar&utm_medium=referral` links, in the app and in `photo-credits.md`.
+- *Not a replacement for Unsplash:* searches run per post, for Threecolts' own posts only; nothing is browsable as a photo library.
+- *Rate limit:* demo apps get 50 requests an hour. One post uses roughly 7–20 (3 searches per photo, a second round if nothing passes, 1 download tracking call per pick). **Apply for production** in the Unsplash developer dashboard before Angela uses it for a full month.
+
+**Not built yet:** Claude's self-review of the rendered frames against the `look.md` checklist (BUILD-SPEC step 5).

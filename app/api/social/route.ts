@@ -1,12 +1,15 @@
 import { createHash } from "crypto"
 import { createClient } from "@/lib/supabase/server"
 import { readGoogleDoc } from "@/lib/google-doc"
-import { generatePlan, planToPostSpec, regenerateOption, type BriefInput, type ModelRun } from "@/lib/social/plan"
+import { formatsFor, generatePlan, planToPostSpec, regenerateOption, type BriefInput, type ModelRun } from "@/lib/social/plan"
 import { PLATFORMS, POST_TYPES, type Platform, type PostType, type SocialPlan } from "@/lib/social/plan-schema"
 import { runChecks, type CheckIssue } from "@/lib/social/checks"
 import { buildZip, captionsMarkdown, creditsMarkdown, type PhotoRecord } from "@/lib/social/package"
+import { findPhoto, type PickRound } from "@/lib/social/photos"
+import { unsplashKey, UnsplashError } from "@/lib/social/unsplash"
 
-export const maxDuration = 120
+// Planning, photo picking and rendering each take 20–90 s
+export const maxDuration = 300
 
 /**
  * Lab → Social: one calendar entry + its Google Doc → three static post
@@ -33,7 +36,11 @@ interface SocialPostRow {
   brief_url: string | null
   brief_text: string | null
   brief_hash: string | null
-  plan: (SocialPlan & { meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string; briefSource?: "pasted" | "doc" } }) | null
+  plan: (SocialPlan & {
+    meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string; briefSource?: "pasted" | "doc" }
+    /** Per photo slot: search terms, Jev scores, shortlist, Claude's pick and reasons */
+    photo_log?: Record<string, { rounds: PickRound[]; note: string; error: string | null; at: string }>
+  }) | null
   checks: CheckIssue[]
   photos: Record<string, PhotoRecord>
   renders: { name: string; option: string; format: string; path: string }[]
@@ -83,7 +90,7 @@ async function saveRow(supabase: Supabase, itemId: string, patch: Partial<Social
 /** The row as the client sees it: signed URLs for every render and photo */
 async function present(supabase: Supabase, row: SocialPostRow | null, stale = false) {
   if (!row) return { post: null }
-  const paths = [...row.renders.map(r => r.path), ...Object.values(row.photos).map(p => p.path)]
+  const paths = [...row.renders.map(r => r.path), ...Object.values(row.photos).map(p => p.path).filter((p): p is string => !!p)]
   const urls: Record<string, string> = {}
   if (paths.length) {
     const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_TTL)
@@ -94,7 +101,9 @@ async function present(supabase: Supabase, row: SocialPostRow | null, stale = fa
       ...row,
       stale,
       renders: row.renders.map(r => ({ ...r, url: urls[r.path] ?? null })),
-      photos: Object.fromEntries(Object.entries(row.photos).map(([k, p]) => [k, { ...p, url: urls[p.path] ?? null }])),
+      // display: what the app shows (Unsplash thumbnails are hotlinked; uploads get a signed URL)
+      photos: Object.fromEntries(Object.entries(row.photos).map(([k, p]) => [k, { ...p, display: p.source === "unsplash" ? p.thumb ?? null : (p.path ? urls[p.path] ?? null : null) }])),
+      unsplash: !!unsplashKey(),
     },
   }
 }
@@ -110,6 +119,19 @@ function briefFrom(item: NonNullable<Awaited<ReturnType<typeof loadItem>>>, docT
     docText,
     ...meta,
   }
+}
+
+async function fetchDataUrl(url: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Couldn't load the Unsplash photo (${res.status}).`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  return `data:${res.headers.get("content-type") || "image/jpeg"};base64,${buf.toString("base64")}`
+}
+
+/** Every slide that needs a photo, with what the picker needs to know */
+function photoSlots(plan: SocialPlan) {
+  return plan.options.flatMap(o => o.slides.map((slide, i) => ({ slot: `${o.option}-${i + 1}`, slide, layout: slide.layout, strongest: o.strongest })))
+    .filter(s => s.layout === "fullbleed" || s.layout === "framed")
 }
 
 async function toDataUrl(supabase: Supabase, path: string) {
@@ -241,11 +263,11 @@ export async function POST(req: Request) {
       if (!/^[ABC]-\d+$/.test(slot)) return Response.json({ error: "Bad photo slot" }, { status: 400 })
       const photos = { ...row.photos }
       if (body.remove) delete photos[slot]
-      else {
-        const path = String(body.path ?? photos[slot]?.path ?? "")
+      else if (body.path) {
+        // A manual upload replaces whatever was in the slot
+        const path = String(body.path)
         if (!path.startsWith(`${row.id}/`)) return Response.json({ error: "Upload the photo first" }, { status: 400 })
         photos[slot] = {
-          ...photos[slot],
           path,
           source: "upload",
           ...(body.focus ? { focus: String(body.focus).slice(0, 20) } : {}),
@@ -255,8 +277,51 @@ export async function POST(req: Request) {
             file_name: body.credit.file_name ?? null,
           } : {}),
         }
-      }
+      } else if (body.focus && photos[slot]) {
+        photos[slot] = { ...photos[slot], focus: String(body.focus).slice(0, 20) }
+      } else return Response.json({ error: "Nothing to change" }, { status: 400 })
       return Response.json(await present(supabase, await saveRow(supabase, itemId, { photos })))
+    }
+
+    // ── Find photos on Unsplash: every empty photo slot, or one slot again ("find another") ──
+    if (body.action === "photos") {
+      if (!unsplashKey()) return Response.json({ error: "Unsplash isn't connected (UNSPLASH_ACCESS_KEY). Upload photos instead." }, { status: 400 })
+      const one = body.slot ? String(body.slot) : null
+      const slots = photoSlots(row.plan).filter(s => (one ? s.slot === one : !row.photos[s.slot]))
+      if (!slots.length) return Response.json(await present(supabase, row))
+      // Fits the set: never reuse a photo already in this post, or one Angela rejected
+      const exclude = new Set<string>([
+        ...Object.values(row.photos).map(p => p.unsplash_id).filter((x): x is string => !!x),
+        ...(Array.isArray(body.exclude) ? body.exclude.map(String) : []),
+      ])
+      const results = await Promise.all(slots.map(async s => {
+        try { return { s, r: await findPhoto(s.slide, s.layout, formatsFor(meta.postType, meta.platforms, s.strongest), new Set(exclude)), error: null } }
+        catch (e) { return { s, r: null, error: e instanceof UnsplashError ? e.message : e instanceof Error ? e.message : "Photo search failed" } }
+      }))
+
+      // Re-read so a concurrent edit isn't lost, then merge only these slots
+      const fresh = (await loadRow(supabase, itemId)) ?? row
+      const photos = { ...fresh.photos }
+      const log: Record<string, { rounds: PickRound[]; note: string; error: string | null; at: string }> = { ...(fresh.plan?.photo_log ?? {}) }
+      const runs = [...fresh.runs]
+      const errors: string[] = []
+      for (const { s, r, error } of results) {
+        log[s.slot] = { rounds: r?.rounds ?? [], note: r?.note ?? "", error, at: new Date().toISOString() }
+        if (r) runs.push(...r.runs)
+        if (r?.photo) photos[s.slot] = r.photo
+        else if (one) delete photos[s.slot]
+        if (error) errors.push(error)
+      }
+      // That option's renders are out of date now
+      const changed = new Set(results.filter(x => x.r?.photo).map(x => x.s.slot.split("-")[0]))
+      const saved = await saveRow(supabase, itemId, {
+        photos,
+        plan: { ...fresh.plan!, photo_log: log },
+        runs,
+        renders: fresh.renders,
+        error: errors.length ? [...new Set(errors)].join(" ") : null,
+      })
+      return Response.json({ ...(await present(supabase, saved)), changed: [...changed] })
     }
 
     // ── Render one option, or all three ──
@@ -265,7 +330,8 @@ export async function POST(req: Request) {
       const postId = postIdFor(item)
       const dataUrls: Record<string, string> = {}
       for (const [slot, p] of Object.entries(row.photos)) {
-        if (!only || slot.startsWith(`${only}-`)) dataUrls[slot] = await toDataUrl(supabase, p.path)
+        if (only && !slot.startsWith(`${only}-`)) continue
+        dataUrls[slot] = p.source === "unsplash" && p.url ? await fetchDataUrl(p.url) : await toDataUrl(supabase, p.path!)
       }
       const spec = planToPostSpec(postId, row.plan, meta.postType, meta.platforms, slot =>
         dataUrls[slot] ? { url: dataUrls[slot], focus: row.photos[slot]?.focus } : null)

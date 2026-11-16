@@ -723,7 +723,7 @@ export function AiLab() {
           {tab === "triage" && "Seven decisions at once: campaign, channel, format, product, audience, priority and a duplicate check."}
           {tab === "comment" && "Pick an idea and ask Jev about one of its comments. If it asks for a split, Claude reads the idea and its doc and drafts the campaigns; each is matched against your live campaigns before anything is created."}
           {tab === "plan" && "Claude turns a brain-dump into campaigns and dated items. Each item is checked for channel fit and duplicates, and each campaign matched to a live one."}
-          {tab === "social" && "Pick an entry with a Google Doc. Claude reads the Doc and writes three design options with captions; you add photos, render every size, approve one and download the zip. Nothing here changes the calendar."}
+          {tab === "social" && "Pick an entry and give it the brief. Claude writes three design options and captions, picks real Unsplash photos (Jev filters out stock first) and renders every size. You approve one, tweak captions and download the zip. Nothing here changes the calendar."}
         </p>
       </div>
 

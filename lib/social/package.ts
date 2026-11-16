@@ -5,7 +5,13 @@ import type { SocialPlan } from "@/lib/social/plan-schema"
 /** Port of social/code/package.py for one calendar entry. */
 
 export interface PhotoRecord {
-  path: string
+  /** Storage path, for uploaded photos */
+  path?: string
+  /** Render URL, for Unsplash photos (hotlinked, never re-hosted) */
+  url?: string
+  thumb?: string
+  page?: string
+  reason?: string
   focus?: string
   source: "upload" | "unsplash"
   photographer?: string | null
@@ -50,7 +56,7 @@ export function creditsMarkdown(postId: string, photos: Record<string, PhotoReco
     const p = photos[slot]
     const [option, card] = slot.split("-")
     const who = p.photographer || (p.source === "upload" ? `uploaded file${p.file_name ? ` ${p.file_name}` : ""} (no Unsplash credit in the file name)` : "unknown")
-    const link = p.unsplash_id ? `https://unsplash.com/photos/${p.unsplash_id}` : p.photographer_url ?? ""
+    const link = p.unsplash_id ? `https://unsplash.com/photos/${p.unsplash_id}${p.photographer_url ? ` (photographer: ${p.photographer_url.split("?")[0]})` : ""}` : p.photographer_url ?? ""
     lines.push(`- ${postId} option ${option}${card !== "1" ? `, card ${card}` : ""}: ${who} ${link}`.trimEnd())
   }
   return lines.join("\n") + "\n"

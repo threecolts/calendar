@@ -17,7 +17,7 @@ type Platform = "Instagram" | "LinkedIn" | "X" | "Facebook"
 type PostType = "single" | "carousel" | "story"
 interface PlanSlide {
   layout: "fullbleed" | "framed" | "type" | "close"
-  headline: string; sub: string | null; eyebrow: string | null; prompt: string | null; cta: string | null
+  headline: string; sub: string | null; eyebrow: string | null; prompt: string | null
   photo: { moment: string; search_terms: { term: string }[]; look_for: string; skip: string } | null
   alt_text: string
 }
@@ -28,13 +28,27 @@ interface Plan {
   captions: { platform: Platform; text: string }[]
   flags: { text: string; reason: string }[]
   meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string }
+  photo_log?: Record<string, { rounds: PickRound[]; note: string; error: string | null }>
 }
-interface Photo { path: string; url: string | null; focus?: string; photographer?: string | null; unsplash_id?: string | null; file_name?: string | null }
+interface Photo {
+  source: "upload" | "unsplash"
+  display: string | null
+  focus?: string
+  photographer?: string | null
+  photographer_url?: string | null
+  unsplash_id?: string | null
+  file_name?: string | null
+  page?: string
+  reason?: string
+}
+interface PickRound { terms: string[]; found: number; shortlist: unknown[]; pick: string | null; reason: string; engine: string }
 interface Render { name: string; option: string; format: string; path: string; url: string | null }
 interface SocialPost {
   id: string
   status: "draft" | "planned" | "rendered" | "approved" | "error"
   stale: boolean
+  unsplash: boolean
+  error: string | null
   brief_text: string | null
   plan: Plan | null
   checks: { severity: "error" | "warning"; where: string; message: string }[]
@@ -141,63 +155,89 @@ function EntryPicker({ items, value, onChange }: { items: (ContentItem & { campa
 
 // ---- One option: copy, photo slots, renders, actions ----
 
-function PhotoSlot({ post, slot, slide, itemId, editable, onPost }: {
-  post: SocialPost; slot: string; slide: PlanSlide; itemId: string; editable: boolean; onPost: (p: SocialPost) => void
+function PhotoSlot({ post, slot, slide, itemId, editable, onPost, onChanged }: {
+  post: SocialPost; slot: string; slide: PlanSlide; itemId: string; editable: boolean
+  onPost: (p: SocialPost) => void
+  /** The photo changed: re-render this option */
+  onChanged: (option: string) => void
 }) {
   const photo = post.photos[slot]
-  const [busy, setBusy] = useState(false)
+  const log = post.plan?.photo_log?.[slot]
+  const [busy, setBusy] = useState<"" | "upload" | "find" | "save">("")
   const [error, setError] = useState("")
+  const option = slot.split("-")[0]
 
-  async function upload(file: File) {
-    setBusy(true); setError("")
+  async function call(kind: "upload" | "find" | "save", body: Record<string, unknown>, rerender: boolean) {
+    setBusy(kind); setError("")
     try {
-      const blob = await prepareImage(file)
-      const path = `${post.id}/photos/${slot}-${Date.now()}.jpg`
-      const { error: upErr } = await createClient().storage.from("social").upload(path, blob, { contentType: "image/jpeg", upsert: true })
-      if (upErr) throw new Error(upErr.message)
-      const { post: next } = await social({ action: "photo", itemId, slot, path, credit: unsplashCredit(file.name) })
-      if (next) onPost(next)
-    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed") }
-    finally { setBusy(false) }
+      const { post: next } = await social({ itemId, slot, ...body })
+      if (next) { onPost(next); if (rerender && next.photos[slot]) onChanged(option) }
+      const err = (next as SocialPost & { error?: string | null } | null)?.error
+      if (kind === "find" && err) setError(err)
+    } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong") }
+    finally { setBusy("") }
   }
 
-  async function update(body: Record<string, unknown>) {
-    setBusy(true); setError("")
-    try { const { post: next } = await social({ action: "photo", itemId, slot, ...body }); if (next) onPost(next) }
-    catch (e) { setError(e instanceof Error ? e.message : "Couldn't save") }
-    finally { setBusy(false) }
+  async function upload(file: File) {
+    setBusy("upload"); setError("")
+    const path = `${post.id}/photos/${slot}-${Date.now()}.jpg`
+    try {
+      const blob = await prepareImage(file)
+      const { error: upErr } = await createClient().storage.from("social").upload(path, blob, { contentType: "image/jpeg", upsert: true })
+      if (upErr) throw new Error(upErr.message)
+    } catch (e) { setError(e instanceof Error ? e.message : "Upload failed"); setBusy(""); return }
+    await call("upload", { action: "photo", path, credit: unsplashCredit(file.name) }, true)
   }
 
   return (
     <div className="rounded-xl bg-surface-container-low p-3 flex flex-col gap-2">
       <div className="flex items-start gap-3">
-        <div
-          className="h-20 w-16 rounded-lg bg-surface-container-high flex-shrink-0 bg-cover"
-          style={photo?.url ? { backgroundImage: `url("${photo.url}")`, backgroundPosition: photo.focus ?? "50% 40%" } : undefined}
-        />
+        {photo?.page
+          ? <a href={photo.page} target="_blank" rel="noopener noreferrer" className="h-24 w-[4.5rem] rounded-lg bg-surface-container-high flex-shrink-0 bg-cover" style={photo.display ? { backgroundImage: `url("${photo.display}")`, backgroundPosition: photo.focus ?? "50% 40%" } : undefined} aria-label="Open on Unsplash" />
+          : <div className="h-24 w-[4.5rem] rounded-lg bg-surface-container-high flex-shrink-0 bg-cover" style={photo?.display ? { backgroundImage: `url("${photo.display}")`, backgroundPosition: photo.focus ?? "50% 40%" } : undefined} />}
         <div className="flex-1 min-w-0 flex flex-col gap-1">
           <p className="text-xs text-on-surface"><span className="font-medium">Photo:</span> {slide.photo?.moment ?? "A photo for this frame."}</p>
-          {photo?.photographer && <p className="text-xs text-on-surface-variant">By {photo.photographer}</p>}
-          {photo && !photo.photographer && <p className="text-xs text-on-surface-variant">No credit found in the file name. Download from Unsplash without renaming to keep it.</p>}
+          {photo?.source === "unsplash" && (
+            <p className="text-xs text-on-surface-variant">
+              Photo by{" "}
+              <a href={photo.photographer_url ?? "#"} target="_blank" rel="noopener noreferrer" className={linkCls}>{photo.photographer}</a>
+              {" "}on{" "}
+              <a href="https://unsplash.com/?utm_source=threecolts_content_calendar&utm_medium=referral" target="_blank" rel="noopener noreferrer" className={linkCls}>Unsplash</a>
+            </p>
+          )}
+          {photo?.source === "unsplash" && photo.reason && <p className="text-xs text-on-surface-variant">Why: {photo.reason}</p>}
+          {photo?.source === "upload" && (photo.photographer
+            ? <p className="text-xs text-on-surface-variant">Uploaded · by {photo.photographer}</p>
+            : <p className="text-xs text-on-surface-variant">Uploaded · no credit in the file name</p>)}
+          {!photo && log && (log.error || log.note) && <p className="text-xs text-on-surface-variant">{log.error || log.note}</p>}
+          {!photo && busy !== "find" && !log && post.unsplash && <p className="text-xs text-on-surface-variant">Not picked yet.</p>}
           {editable && (
             <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {post.unsplash && (
+                <button type="button" disabled={!!busy} onClick={() => call("find", { action: "photos", exclude: photo?.unsplash_id ? [photo.unsplash_id] : [] }, true)}
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-outline-variant text-xs font-medium hover:border-on-surface/30 disabled:opacity-60">
+                  {busy === "find" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  {busy === "find" ? "Searching Unsplash…" : photo ? "Find another" : "Find a photo"}
+                </button>
+              )}
               <label className={cx("inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-outline-variant text-xs font-medium cursor-pointer hover:border-on-surface/30", busy && "opacity-60 pointer-events-none")}>
-                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
-                {photo ? "Replace" : "Upload photo"}
+                {busy === "upload" ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
+                Upload my own
                 <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = "" }} />
               </label>
               {photo && (
                 <>
                   <select
                     aria-label="Focus"
+                    disabled={!!busy}
                     value={FOCUS_PRESETS.find(f => f.value === photo.focus)?.value ?? ""}
-                    onChange={e => update({ focus: e.target.value })}
+                    onChange={e => call("save", { action: "photo", focus: e.target.value }, true)}
                     className="h-7 rounded-full border border-outline-variant bg-transparent px-2 text-xs text-on-surface"
                   >
                     <option value="" disabled>Focus</option>
                     {FOCUS_PRESETS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                   </select>
-                  <button type="button" onClick={() => update({ remove: true })} className="h-7 w-7 inline-grid place-items-center rounded-full text-on-surface-variant hover:text-on-surface" aria-label="Remove photo">
+                  <button type="button" disabled={!!busy} onClick={() => call("save", { action: "photo", remove: true }, false)} className="h-7 w-7 inline-grid place-items-center rounded-full text-on-surface-variant hover:text-on-surface" aria-label="Remove photo">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </>
@@ -208,7 +248,7 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost }: {
       </div>
       {slide.photo && (
         <details className="text-xs text-on-surface-variant">
-          <summary className="cursor-pointer select-none">Unsplash search terms</summary>
+          <summary className="cursor-pointer select-none">Search terms{log?.rounds.length ? " and how it was picked" : ""}</summary>
           <div className="mt-2 flex flex-col gap-1.5">
             <div className="flex flex-wrap gap-1.5">
               {slide.photo.search_terms.map(t => (
@@ -219,7 +259,11 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost }: {
             </div>
             <p><span className="font-medium text-on-surface">Look for:</span> {slide.photo.look_for}</p>
             <p><span className="font-medium text-on-surface">Skip:</span> {slide.photo.skip}</p>
-            <p>Portrait, at least 2400 px on the long side. Don't rename the file: it holds the photographer's credit.</p>
+            {log?.rounds.map((r, i) => (
+              <p key={i}>
+                <span className="font-medium text-on-surface">Round {i + 1}:</span> searched {r.terms.map(t => `“${t}”`).join(", ")}; {r.found} usable results, {r.shortlist.length} shortlisted by {r.engine || "Jev"}. {r.pick ? "Claude picked one." : "Nothing passed."} {r.reason}
+              </p>
+            ))}
           </div>
         </details>
       )}
@@ -265,7 +309,6 @@ function OptionCard({ post, option, itemId, editable, busy, onAction, onPost, on
               <span dangerouslySetInnerHTML={{ __html: s.headline.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!)).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") }} />
               {s.sub && <span className="block text-on-surface-variant">{s.sub}</span>}
               {s.prompt && <span className="block text-on-surface-variant">Prompt: “{s.prompt}”</span>}
-              {s.cta && <span className="block text-on-surface-variant">Button: {s.cta}</span>}
             </span>
           </li>
         ))}
@@ -284,7 +327,7 @@ function OptionCard({ post, option, itemId, editable, busy, onAction, onPost, on
       {photoSlides.length > 0 && (
         <div className="flex flex-col gap-2">
           {photoSlides.map(({ s, slot }) => (
-            <PhotoSlot key={slot} post={post} slot={slot} slide={s} itemId={itemId} editable={editable} onPost={onPost} />
+            <PhotoSlot key={slot} post={post} slot={slot} slide={s} itemId={itemId} editable={editable} onPost={onPost} onChanged={opt => onAction("render", { option: opt })} />
           ))}
         </div>
       )}
@@ -435,14 +478,29 @@ export function SocialStudio() {
   }, [itemId])
 
   async function run(action: string, extraBody: Record<string, unknown> = {}) {
-    if (!itemId) return
+    if (!itemId) return null
     const key = extraBody.option ? `${action}-${extraBody.option}` : action
     setBusy(key); setError("")
     try {
       const { post: next } = await social({ action, itemId, ...extraBody })
       setPost(next)
-    } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong") }
+      return next
+    } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong"); return null }
     finally { setBusy(null) }
+  }
+
+  /** The whole thing, no manual steps: plan → photos from Unsplash → render every option */
+  async function generate() {
+    const planned = await run("plan", { platforms, postType, cards, extra, briefText: brief })
+    if (!planned?.plan) return
+    const needsPhotos = planned.plan.options.some(o => o.slides.some(s => s.layout === "fullbleed" || s.layout === "framed"))
+    let current = planned
+    if (needsPhotos && planned.unsplash) {
+      const withPhotos = await run("photos")
+      if (withPhotos) current = withPhotos
+    }
+    await run("render")
+    if (current.error) setError(current.error)
   }
 
   const plan = post?.plan ?? null
@@ -516,12 +574,14 @@ export function SocialStudio() {
               <div className="flex flex-wrap items-center gap-3">
                 <Button disabled={!!busy || !brief.trim() || (!platforms.length && postType !== "story")} onClick={() => {
                   if (plan && !confirm("Write a new plan? This replaces the current options, photos and renders.")) return
-                  run("plan", { platforms, postType, cards, extra, briefText: brief })
+                  generate()
                 }}>
                   {busy === "plan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   {plan ? "Write a new plan" : "Write three options"}
                 </Button>
-                {busy === "plan" && <span className="text-sm text-on-surface-variant">Claude is reading the brief and writing the options. About a minute.</span>}
+                {busy === "plan" && <span className="text-sm text-on-surface-variant">1 of 3 · Claude is reading the brief and writing three options. About a minute.</span>}
+                {busy === "photos" && <span className="text-sm text-on-surface-variant">2 of 3 · Finding photos on Unsplash: Jev filters out stock, Claude picks. About a minute.</span>}
+                {busy === "render" && <span className="text-sm text-on-surface-variant">3 of 3 · Rendering every size.</span>}
               </div>
             ) : (
               <p className="text-sm text-on-surface-variant">Only editors can generate posts.</p>

@@ -25,10 +25,9 @@ const slide = z.object({
   sub: z.string().nullable(),
   eyebrow: z.string().nullable().describe("Rarely: only to name a card's function"),
   prompt: z.string().nullable().describe("AI Operator chat bubble: a real plain-English request a seller would type"),
-  cta: z.string().nullable().describe("Title Case, no full stop. Only the CTA the brief gives"),
   dark: z.boolean().describe("Graphite canvas for framed/type/close. AI Operator type cards are dark"),
   anchor_bottom: z.boolean().describe("Type cards only: text at the bottom"),
-  stat: z.object({ value: z.string(), label: z.string() }).nullable().describe("Only with a number from the brief"),
+  stat: z.object({ value: z.string(), label: z.string() }).nullable().describe("Only for data from the brief, never for a discount or price"),
   photo: photoBrief.nullable().describe("Required for fullbleed and framed; null for type and close"),
   alt_text: z.string().describe("Plain description of the image and the words on it"),
 })
@@ -46,7 +45,7 @@ export const planSchema = z.object({
   captions: z.array(z.object({
     platform: z.enum(PLATFORMS),
     text: z.string(),
-  })).describe("One caption per requested platform (none for a story-only post)"),
+  })).describe("One caption per requested platform (none for a story-only post). The CTA from the brief goes here, never on the image"),
   flags: z.array(z.object({
     text: z.string().describe("The claim, number, price or date"),
     reason: z.string().describe("Why it needs checking: not in the Doc, from TO-CONFIRM, or an assumption you made"),

@@ -6,6 +6,7 @@
 - **Text sits on the photo, lower left, in white.** No boxes, no bars, no outline. A soft dark fade from the bottom keeps it readable.
 - **Type is quiet.** Inter, mostly regular weight, with the key phrase in semibold ("This legend built an app to **help your grandparents** not get scammed."). Or one short semibold line.
 - **No logo on the post.** The profile picture carries the brand. The product is named in the words.
+- **Posts, not ads.** No CTA buttons, no "Shop now" or "Start Free Trial" on the image, no price stickers or giant discount numbers. The image tells one true thing; the caption carries the offer and the next step. An offer can appear on the image only as a plain sentence in the headline or sub ("Annual plans are 20% off your first year this month.").
 - **Plain type cards** for news and explainers: a clean canvas, a sentence, nothing else.
 - **Carousels** open on a photo and then go to type cards.
 
@@ -19,8 +20,8 @@ What keeps it Threecolts: Inter, the brand voice, the soft brand wash on type ca
 |---|---|---|
 | `fullbleed` (A) | Photo fills the frame, white text lower left, optional prompt bubble above the headline | The default. Stories about sellers, product moments, hooks |
 | `framed` (B) | Photo in a rounded frame on the light wash, dark text below | When the photo is busy, or you want the cleaner brand-book look |
-| `type` (C) | No photo. Headline on the wash, optional stat, prompt bubble or CTA pill. `"dark": true` for graphite | News, explainers, quotes, AI Operator prompts, carousel interior cards |
-| `close` | Carousel closing card: headline, sub, CTA pill | The last card of a carousel |
+| `type` (C) | No photo. Headline on the wash, optional stat or prompt bubble. `"dark": true` for graphite | News, explainers, quotes, AI Operator prompts, carousel interior cards |
+| `close` | Carousel closing card: a closing line and sub, no button | The last card of a carousel |
 
 **Mixed-weight headlines:** wrap the key phrase in `**…**`, e.g. `"She checked **400 products** before lunch."`. The rest sets in regular weight. Without `**`, the whole headline is semibold. Use mixed weight on most full-bleed posts; semibold for short punchy lines (five words or fewer).
 
@@ -39,3 +40,4 @@ What keeps it Threecolts: Inter, the brand voice, the soft brand wash on type ca
 7. Story: is all text between y 250 and y 1520?
 8. Carousel: does the cover work on its own in the grid? Does every card have one point?
 9. Are the three options genuinely different?
+10. Does it read like a post rather than an ad: no button, no price sticker, no shouting offer?
