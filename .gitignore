@@ -17,3 +17,6 @@ node_modules
 .vercel
 .env*
 !.env.example
+
+# Lab → Social: local demo renders (scripts/social-render-demo.mts)
+/.social-out

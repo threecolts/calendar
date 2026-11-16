@@ -17,6 +17,7 @@ import { toPlainText } from "@/lib/mentions"
 import { GuidedTour, OPEN_GUIDE_EVENT, type Step } from "@/components/onboarding-tour"
 import { ChannelIcon } from "@/components/channel-icon"
 import { Button, ErrorText, Field, SegmentedControl, cx, fieldCls, linkCls, textareaCls } from "@/components/kit"
+import { SocialStudio } from "@/components/social-studio"
 
 // ---- Types mirrored from /api/lab ----
 interface Decision { id: string; answer: string; confidence: number; alternatives: { option: string; probability: number }[] }
@@ -589,14 +590,14 @@ function PlanDemo() {
 
 // ---- Page ----
 
-type Tab = "triage" | "comment" | "plan"
+type Tab = "triage" | "comment" | "plan" | "social"
 
 const labSeenKey = (userId: string) => `content-calendar:lab-guide-seen:v1:${userId}`
 
 export function AiLab() {
   const params = useSearchParams()
   const initialTab = params.get("tab")
-  const [tab, setTab] = useState<Tab>(initialTab === "comment" || initialTab === "plan" ? initialTab : "triage")
+  const [tab, setTab] = useState<Tab>(initialTab === "comment" || initialTab === "plan" || initialTab === "social" ? initialTab : "triage")
 
   const steps = useMemo<Step[]>(() => [
     {
@@ -706,6 +707,7 @@ export function AiLab() {
             { value: "triage", label: "Sort an idea" },
             { value: "comment", label: "Comment to action" },
             { value: "plan", label: "Check a plan" },
+            { value: "social", label: "Social posts" },
           ]}
         />
       </div>
@@ -715,17 +717,20 @@ export function AiLab() {
           {tab === "triage" && "Ideas sorted as you type"}
           {tab === "comment" && "A teammate's comment becomes a one-click action"}
           {tab === "plan" && "Claude drafts the plan, every item gets checked"}
+          {tab === "social" && "A calendar entry and its Doc become ready-to-post graphics"}
         </h2>
         <p className="text-sm text-on-surface-variant">
           {tab === "triage" && "Seven decisions at once: campaign, channel, format, product, audience, priority and a duplicate check."}
           {tab === "comment" && "Pick an idea and ask Jev about one of its comments. If it asks for a split, Claude reads the idea and its doc and drafts the campaigns; each is matched against your live campaigns before anything is created."}
           {tab === "plan" && "Claude turns a brain-dump into campaigns and dated items. Each item is checked for channel fit and duplicates, and each campaign matched to a live one."}
+          {tab === "social" && "Pick an entry with a Google Doc. Claude reads the Doc and writes three design options with captions; you add photos, render every size, approve one and download the zip. Nothing here changes the calendar."}
         </p>
       </div>
 
       {tab === "triage" && <TriageDemo />}
       {tab === "comment" && <CommentDemo initialIdeaId={params.get("idea") ?? undefined} initialCommentId={params.get("comment") ?? undefined} />}
       {tab === "plan" && <PlanDemo />}
+      {tab === "social" && <SocialStudio />}
 
       <GuidedTour steps={steps} storageKey={labSeenKey} active />
     </div>
