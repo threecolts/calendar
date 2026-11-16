@@ -1,0 +1,53 @@
+{
+  "week": "Demo week. Placeholder product photos from the motion system, standing in for Unsplash picks",
+  "posts": [
+    {
+      "id": "p01",
+      "product": "ai-operator",
+      "options": [
+        {
+          "option": "A", "layout": "fullbleed",
+          "why": "OpenAI look: photo first, mixed-weight line lower left, the prompt as proof.",
+          "photo": "photos/scale-counter.jpg", "focus": "60% 50%",
+          "prompt": "Check if I'm ungated for these 40 products.",
+          "headline": "**Ask before you buy.** AI Operator checks what you're allowed to sell.",
+          "formats": ["portrait", "square", "story"]
+        },
+        {
+          "option": "B", "layout": "framed",
+          "why": "Brand-book look for a busier photo: framed on the wash.",
+          "photo": "photos/boards.jpg", "focus": "50% 45%",
+          "prompt": "Check if I'm ungated for these 40 products.",
+          "headline": "Ask before you buy.",
+          "sub": "AI Operator checks what you're allowed to sell before you order the stock.",
+          "formats": ["portrait", "landscape"]
+        },
+        {
+          "option": "C", "layout": "type", "dark": true, "anchor": "bottom",
+          "why": "No photo: the sentence is the post, like OpenAI's plain cards. AI Operator on graphite.",
+          "headline": "Nothing costs more than **stock you can't sell.**",
+          "prompt": "Check if I'm ungated for these 40 products.",
+          "formats": ["portrait"]
+        }
+      ]
+    },
+    {
+      "id": "p02",
+      "product": "ai-operator",
+      "options": [
+        {
+          "option": "A",
+          "why": "Carousel: photo cover, three question cards, close.",
+          "formats": ["portrait"],
+          "slides": [
+            {"layout": "fullbleed", "photo": "photos/pour-over.jpg", "focus": "45% 40%", "headline": "Three questions to ask **before you source anything.**"},
+            {"layout": "type", "eyebrow": "Question one", "headline": "Am I allowed to sell this?", "sub": "Gating and brand restrictions, checked in one prompt."},
+            {"layout": "type", "eyebrow": "Question two", "headline": "Is it still profitable after fees?", "prompt": "Show me the margin on these after FBA fees."},
+            {"layout": "type", "eyebrow": "Question three", "headline": "How fast will it sell?", "sub": "Sales rank and offer count, side by side."},
+            {"layout": "close", "dark": true, "headline": "Ask AI Operator first.", "sub": "Included with Seller 365.", "cta": "Start Free Trial"}
+          ]
+        }
+      ]
+    }
+  ]
+}

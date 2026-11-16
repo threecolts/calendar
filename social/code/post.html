@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Threecolts static post renderer</title>
+<style>
+@font-face{font-family:"Inter";font-weight:400;src:url("../fonts/inter-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Inter";font-weight:600;src:url("../fonts/inter-latin-600-normal.woff2") format("woff2")}
+@font-face{font-family:"Inter";font-weight:700;src:url("../fonts/inter-latin-700-normal.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;src:url("../fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2")}
+
+/* Tokens: Threecolts Brand System (org default design system). Social scale: see system/layouts.md */
+:root{
+  --canvas-light:#f4f4f4; --canvas-dark:#1d1d1d;
+  --surface-light:#ffffff; --surface-dark:#2b2b2b;
+  --text-primary-light:#1d1d1d; --text-primary-dark:#ffffff;
+  --text-secondary-light:#474747; --text-secondary-dark:#d7d7d7;
+  --text-muted-light:#707070; --text-muted-dark:#9a9a9a;
+  --frost-light:#f4f4f4b3; --frost-dark:#1d1d1db3;
+  --stroke-light:#d7d7d7; --stroke-dark:#ffffff1f;
+  --radius-md:12px; --radius-lg:16px; --radius-xl:24px; --radius-full:9999px;
+  --shadow-card:0 1.5px 4px rgba(0,0,0,.04),0 8px 32px rgba(148,163,184,.13);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:transparent}
+body{font-family:"Inter",-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+
+.frame{position:relative;overflow:hidden;font-feature-settings:"ss01" 0,"cv11" 1}
+.frame.light{--tp:var(--text-primary-light);--ts:var(--text-secondary-light);--tm:var(--text-muted-light);--frost:var(--frost-light);--stroke:var(--stroke-light);background:var(--canvas-light)}
+.frame.dark{--tp:var(--text-primary-dark);--ts:var(--text-secondary-dark);--tm:var(--text-muted-dark);--frost:var(--frost-dark);--stroke:var(--stroke-dark);background:var(--canvas-dark)}
+
+/* Brand wash: the org's ready-made PNGs, cropped to the canvas from the bottom right.
+   The dark PNG is on black, so it is lightened onto graphite (#1d1d1d) as the brand book asks. */
+.wash{position:absolute;inset:0;background-repeat:no-repeat;background-position:right bottom;background-size:cover}
+.light .wash{background-image:url("../brand/wash-light.png")}
+.dark .wash{background-image:url("../brand/wash-dark.png");background-color:#1d1d1d;background-blend-mode:lighten}
+.landscape .wash{background-size:118% auto}
+
+/* Outline mark: oversized, cropped at the right edge, low contrast, never as a logo */
+.mark{position:absolute;right:calc(var(--W) * -0.17);top:calc(var(--H) * 0.06);height:calc(var(--H) * 0.92);opacity:.55;pointer-events:none}
+.dark .mark{opacity:.45}
+
+.pad{position:absolute;left:var(--px);right:var(--px);top:var(--pt);bottom:var(--pb);display:flex;flex-direction:column}
+
+/* Logos */
+.lockup{display:block;height:var(--logo-h);width:auto;align-self:flex-start;flex:0 0 auto}
+.tc-small{position:absolute;right:var(--px);bottom:calc(var(--pb) - var(--logo-h) * 0.1);height:calc(var(--logo-h) * 0.78);width:auto}
+
+/* Type: Inter 600, −0.03em, sentence case, ends with a period (brand book) */
+.eyebrow{font-weight:600;font-size:var(--eyebrow);letter-spacing:.08em;text-transform:uppercase;color:var(--tm);line-height:1}
+.headline.mixed{font-weight:400;letter-spacing:-.02em}
+.headline.mixed strong{font-weight:600}
+.headline{font-weight:600;letter-spacing:-.03em;line-height:1.06;color:var(--tp);font-size:var(--h-size);text-wrap:balance}
+.sub{font-weight:400;color:var(--ts);font-size:var(--body);line-height:1.35;letter-spacing:-.005em;max-width:30ch}
+.stat{font-weight:700;letter-spacing:-.03em;line-height:1;color:var(--tp);font-size:var(--stat)}
+.statlabel{font-family:"IBM Plex Mono",monospace;font-size:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tm);margin-top:calc(var(--u)*1.4)}
+
+/* Prompt bubble (from the AI Operator posts): frosted surface, pill-family radius, hairline edge */
+.prompt{display:flex;align-items:center;gap:calc(var(--u)*1.6);max-width:84%}
+.prompt .plus{flex:0 0 auto;width:calc(var(--u)*6);height:calc(var(--u)*6);border-radius:50%;display:grid;place-items:center;background:var(--frost);border:1px solid var(--stroke);backdrop-filter:blur(20px);color:var(--tm)}
+.prompt .plus svg{width:44%;height:44%}
+.prompt .bubble{background:var(--frost);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--stroke);border-radius:calc(var(--u)*3.6);padding:calc(var(--u)*2.2) calc(var(--u)*3);font-size:var(--prompt);line-height:1.32;color:var(--tp);font-weight:400;letter-spacing:-.005em}
+
+/* CTA: every button is a pill */
+.cta{align-self:flex-start;display:inline-flex;align-items:center;gap:calc(var(--u)*1.2);border-radius:var(--radius-full);padding:calc(var(--u)*2) calc(var(--u)*3.6);font-weight:600;font-size:var(--cta);letter-spacing:-.01em}
+.light .cta{background:#1d1d1d;color:#fff}
+.dark .cta{background:#fff;color:#1d1d1d}
+
+/* ---------- Layout A: full-bleed photo (Angela's reference look) ---------- */
+.fullbleed .photo{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat}
+.fullbleed .scrim{position:absolute;inset:0;background:
+  linear-gradient(to top,rgba(0,0,0,.62) 0%,rgba(0,0,0,.38) 26%,rgba(0,0,0,0) 52%),
+  linear-gradient(to bottom,rgba(0,0,0,.30) 0%,rgba(0,0,0,0) 22%)}
+.fullbleed{--tp:#fff;--ts:rgba(255,255,255,.88);--tm:rgba(255,255,255,.72)}
+.fullbleed .prompt{--frost:rgba(255,255,255,.92);--stroke:rgba(255,255,255,.6);--tp:#1d1d1d;--tm:#707070}
+.fullbleed .headline{text-shadow:0 1px 24px rgba(0,0,0,.18)}
+.fullbleed .bottom{margin-top:auto;display:flex;flex-direction:column;gap:calc(var(--u)*2.4)}
+
+/* ---------- Layout B: framed photo on the wash (brand book look) ---------- */
+.framed .pad{gap:calc(var(--u)*4)}
+.framed .photoframe{position:relative;flex:1 1 auto;min-height:0;border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-card);background-size:cover}
+.framed .photoframe .prompt{position:absolute;left:calc(var(--u)*3);right:calc(var(--u)*3);bottom:calc(var(--u)*3);--frost:rgba(255,255,255,.9);--stroke:rgba(255,255,255,.6);--tp:#1d1d1d;--tm:#707070}
+.framed .copy{flex:0 0 auto;display:flex;flex-direction:column;gap:calc(var(--u)*1.8);padding-right:calc(var(--logo-h)*3)}
+
+.landscape.framed .pad{display:grid;grid-template-columns:1fr 1.05fr;grid-template-rows:auto 1fr;column-gap:calc(var(--u)*4);row-gap:0}
+.landscape.framed .lockup{grid-column:1;grid-row:1}
+.landscape.framed .photoframe{grid-column:2;grid-row:1 / span 2}
+.landscape.framed .copy{grid-column:1;grid-row:2;align-self:end;padding-right:0;padding-bottom:calc(var(--logo-h)*1.4)}
+.landscape.framed .tc-small{right:auto;left:var(--px)}
+
+/* ---------- Layout C: type on the wash with the outline mark ---------- */
+.type .pad{justify-content:space-between}
+.type.anchor-bottom .pad{justify-content:flex-end}
+.type .middle{display:flex;flex-direction:column;gap:calc(var(--u)*3.2);max-width:88%}
+.type .foot{display:flex;flex-direction:column;gap:calc(var(--u)*3)}
+
+/* ---------- Carousel close card ---------- */
+.close .pad{justify-content:flex-end}
+.close .middle{display:flex;flex-direction:column;gap:calc(var(--u)*3.2)}
+
+.debug-safe{position:absolute;left:0;right:0;border:2px dashed #ff00ff;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* Formats. Pads follow canvas-pad (88px at 1080 wide). Story keeps text inside y 250–1520 (Instagram safe zone). */
+const FORMATS = {
+  square:    {W:1080,H:1080,px:88,pt:88, pb:88},
+  portrait:  {W:1080,H:1350,px:88,pt:96, pb:96},
+  story:     {W:1080,H:1920,px:88,pt:250,pb:400},
+  landscape: {W:1200,H:628, px:64,pt:56, pb:56}
+};
+const LOGOS = {
+  "threecolts":  {light:"threecolts-colour-light.svg", dark:"threecolts-colour-dark.svg"},
+  "ai-operator": {light:"ai-operator-logo-light.svg",  dark:"ai-operator-logo-dark.svg"},
+  "seller-365":  {light:"seller-365-logo-light.svg",   dark:"seller-365-logo-dark.svg"}
+};
+const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+const smart = s => String(s ?? "").replace(/(\w)'(\w)/g,"$1\u2019$2").replace(/(^|[\s(])'/g,"$1\u2018").replace(/'/g,"\u2019").replace(/(^|[\s(])"/g,"$1\u201C").replace(/"/g,"\u201D");
+const KEEP = ["AI Operator","Seller 365","Retail 365","Margin Pro","Tactical Arbitrage","InventoryLab Accounting"];
+const keep = s => KEEP.reduce((t,n) => t.split(n).join(n.replace(/ /g,"\u00A0")), s);
+const esc = s => keep(smart(s)).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function logoFile(product, onDark){
+  const set = LOGOS[product] || LOGOS.threecolts;
+  // "light" files have white wordmarks for dark surfaces
+  return "../brand/" + (onDark ? set.light : set.dark);
+}
+
+window.render = async function(spec){
+  const f = FORMATS[spec.format || "square"];
+  const scale = f.W / 1080;
+  const u = 10 * scale;                       // 10px unit at 1080 wide
+  const root = document.getElementById("root");
+  const layout = spec.layout || "fullbleed";
+  const dark = layout === "fullbleed" ? true : !!spec.dark;
+  const product = spec.product || "threecolts";
+  const isLand = spec.format === "landscape";
+  const vars = {
+    "--W": f.W+"px", "--H": f.H+"px", "--u": u+"px",
+    "--px": f.px+"px", "--pt": f.pt+"px", "--pb": f.pb+"px",
+    "--logo-h": (isLand ? 40 : 52)*scale+"px",
+    "--eyebrow": (isLand ? 18 : 22)*scale+"px",
+    "--body": (isLand ? 24 : 32)*scale+"px",
+    "--prompt": (isLand ? 22 : 30)*scale+"px",
+    "--mono": (isLand ? 18 : 22)*scale+"px",
+    "--cta": (isLand ? 22 : 28)*scale+"px",
+    "--stat": (isLand ? 120 : 176)*scale+"px"
+  };
+  const style = Object.entries(vars).map(([k,v])=>`${k}:${v}`).join(";");
+  const photo = spec.photo ? `background-image:url('${spec.photo}');background-position:${spec.focus || "50% 40%"}` : "background:#ccc";
+  const eyebrow = spec.eyebrow ? `<div class="eyebrow">${esc(spec.eyebrow)}</div>` : "";
+  const sub = spec.sub ? `<div class="sub">${esc(spec.sub)}</div>` : "";
+  const prompt = spec.prompt ? `<div class="prompt"><div class="plus">${PLUS}</div><div class="bubble">${esc(spec.prompt)}</div></div>` : "";
+  const stat = spec.stat ? `<div><div class="stat">${esc(spec.stat.value)}</div><div class="statlabel">${esc(spec.stat.label)}</div></div>` : "";
+  const cta = spec.cta ? `<div class="cta">${esc(spec.cta)}</div>` : "";
+  const showLogo = spec.logo === true;   // OpenAI-style: no logo on the post unless asked
+  const lockup = showLogo ? `<img class="lockup" src="${logoFile(product, dark)}">` : "";
+  // Threecolts sign-off on product pieces (framed/type/close), bottom right
+  const tcSmall = "";
+  const hl = String(spec.headline ?? "");
+  const mixed = hl.includes("**");
+  const hlHtml = mixed ? esc(hl).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") : esc(hl);
+  const headline = `<div class="headline${mixed ? " mixed" : ""}">${hlHtml}</div>`;
+
+  let inner = "";
+  if (layout === "fullbleed"){
+    inner = `<div class="photo" style="${photo}"></div><div class="scrim"></div>
+      <div class="pad">${lockup}<div class="bottom">${prompt}${eyebrow}${headline}${sub}${cta}</div></div>`;
+  } else if (layout === "framed"){
+    const promptIn = spec.prompt ? `<div class="prompt"><div class="plus">${PLUS}</div><div class="bubble">${esc(spec.prompt)}</div></div>` : "";
+    inner = `<div class="wash"></div>
+      <div class="pad">${lockup}<div class="photoframe" style="${photo}">${promptIn}</div>
+      <div class="copy">${eyebrow}${headline}${sub}</div></div>${tcSmall}`;
+  } else if (layout === "type"){
+    inner = `<div class="wash"></div>${spec.mark ? `<img class="mark" src="../brand/threecolts-mark-outline.svg">` : ""}
+      <div class="pad">${lockup}<div class="middle">${eyebrow}${stat}${headline}${sub}${prompt}</div><div class="foot">${cta}<div style="height:var(--logo-h)"></div></div></div>${tcSmall}`;
+  } else if (layout === "close"){
+    inner = `<div class="wash"></div>${spec.mark ? `<img class="mark" src="../brand/threecolts-mark-outline.svg">` : ""}
+      <div class="pad">${lockup}<div class="middle">${headline}${sub}${cta}</div><div style="height:var(--logo-h)"></div></div>${tcSmall}`;
+  }
+  root.innerHTML = `<div class="frame ${layout} ${spec.anchor==="bottom" ? "anchor-bottom" : ""} ${dark ? "dark" : "light"} ${spec.format || "square"}" style="width:${f.W}px;height:${f.H}px;${style}">${inner}
+    ${spec.debug_safe && spec.format==="story" ? `<div class="debug-safe" style="top:250px;height:1270px"></div>` : ""}</div>`;
+
+  await document.fonts.ready;
+  await Promise.all([...root.querySelectorAll("img")].map(i => i.complete ? 0 : new Promise(r => {i.onload = i.onerror = r;})));
+  fitHeadline(root, spec, f, layout, scale);
+  return {W:f.W, H:f.H};
+};
+
+/* Headline sizing: start big, shrink until it fits its lines and leaves room. Sizes in system/layouts.md */
+function fitHeadline(root, spec, f, layout, scale){
+  const h = root.querySelector(".headline"); if(!h) return;
+  const isLand = spec.format === "landscape";
+  const ranges = {
+    fullbleed:{max:96, min:56, lines:4},
+    framed:   {max:76, min:48, lines:3},
+    type:     {max:112,min:60, lines:5},
+    close:    {max:96, min:56, lines:4}
+  };
+  let {max,min,lines} = ranges[layout] || ranges.fullbleed;
+  if (spec.format === "story"){ max *= 1.08; lines += 1; }
+  if (isLand){ max *= 0.62; min *= 0.6; lines = Math.min(lines,3); }
+  if (spec.stat && layout === "type"){ max = Math.min(max, 80); }
+  if (h.classList.contains("mixed")){ max = Math.min(max, layout === "type" ? 88 : 68); min = Math.min(min, 44); lines += 1; }
+  const pad = root.querySelector(".pad");
+  for (let s = max; s >= min; s -= 2){
+    h.style.fontSize = (s*scale) + "px";
+    const lh = parseFloat(getComputedStyle(h).lineHeight);
+    const n = Math.round(h.getBoundingClientRect().height / lh);
+    const pb = pad.getBoundingClientRect();
+    const kids = [...pad.children].map(k => k.getBoundingClientRect());
+    const over = Math.max(...kids.map(r => r.bottom)) > pb.bottom + 2
+              || kids.some((r,i) => i && r.top < kids[i-1].bottom - 2);
+    if (n <= lines && !over) break;
+  }
+}
+</script>
+</body>
+</html>
