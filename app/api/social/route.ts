@@ -4,7 +4,6 @@ import { readGoogleDoc } from "@/lib/google-doc"
 import { generatePlan, planToPostSpec, regenerateOption, type BriefInput, type ModelRun } from "@/lib/social/plan"
 import { PLATFORMS, POST_TYPES, type Platform, type PostType, type SocialPlan } from "@/lib/social/plan-schema"
 import { runChecks, type CheckIssue } from "@/lib/social/checks"
-import { renderPosts } from "@/lib/social/render"
 import { buildZip, captionsMarkdown, creditsMarkdown, type PhotoRecord } from "@/lib/social/package"
 
 export const maxDuration = 120
@@ -270,6 +269,11 @@ export async function POST(req: Request) {
       }
       const spec = planToPostSpec(postId, row.plan, meta.postType, meta.platforms, slot =>
         dataUrls[slot] ? { url: dataUrls[slot], focus: row.photos[slot]?.focus } : null)
+      // Loaded on demand: headless Chromium is only needed here, and a problem
+      // starting it shouldn't take down the rest of the tab
+      let renderPosts: typeof import("@/lib/social/render").renderPosts
+      try { ({ renderPosts } = await import("@/lib/social/render")) }
+      catch (e) { throw new Error(`The renderer couldn't load on the server: ${e instanceof Error ? e.message : String(e)}`) }
       const frames = await renderPosts([spec], { only: (_, o) => !only || o.option === only })
 
       const stamp = Date.now()
