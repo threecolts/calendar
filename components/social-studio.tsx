@@ -510,21 +510,28 @@ export function SocialStudio() {
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-5">
-        <Field label="1. Calendar entry">
-          <EntryPicker items={items} value={itemId} onChange={pick} />
-        </Field>
+        <div data-tour="social-entry">
+          <Field label="1. Calendar entry">
+            <EntryPicker items={items} value={itemId} onChange={pick} />
+          </Field>
+        </div>
 
-        {item && (
-          <>
-            <div className="flex flex-col gap-1">
-              <p className="text-sm text-on-surface"><span className="font-medium">{item.title}</span> · {niceDate(item.publish_date)} · {item.channel}</p>
-              {item.brief_url && (
-                <a href={item.brief_url} target="_blank" rel="noopener noreferrer" className={cx("text-xs inline-flex items-center gap-1 self-start", linkCls)}>
-                  Open the Google Doc <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
+        {item ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-on-surface"><span className="font-medium">{item.title}</span> · {niceDate(item.publish_date)} · {item.channel}</p>
+            {item.brief_url && (
+              <a href={item.brief_url} target="_blank" rel="noopener noreferrer" className={cx("text-xs inline-flex items-center gap-1 self-start", linkCls)}>
+                Open the Google Doc <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-on-surface-variant">Pick an entry above to start.</p>
+        )}
 
+        {/* Shown before an entry is picked (greyed out) so the guide can point at each step */}
+        <fieldset disabled={!item} className={cx("flex flex-col gap-5 min-w-0", !item && "opacity-50 pointer-events-none select-none")}>
+            <div data-tour="social-brief">
             <Field
               label="2. The brief"
               hint={briefNote || "Paste the Doc's text, or upload it: in Google Docs, File → Download → Microsoft Word (.docx). The whole campaign Doc is fine; Claude uses the part for this entry."}
@@ -544,8 +551,9 @@ export function SocialStudio() {
                 {brief && <span className="text-xs text-on-surface-variant">{brief.length.toLocaleString()} characters</span>}
               </div>
             </Field>
+            </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2" data-tour="social-setup">
               <Field label="3. Platforms">
                 <div className="flex flex-wrap gap-1.5">
                   {PLATFORMS.map(p => (
@@ -571,8 +579,8 @@ export function SocialStudio() {
             </Field>
 
             {isEditor ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button disabled={!!busy || !brief.trim() || (!platforms.length && postType !== "story")} onClick={() => {
+              <div className="flex flex-wrap items-center gap-3" data-tour="social-generate">
+                <Button disabled={!item || !!busy || !brief.trim() || (!platforms.length && postType !== "story")} onClick={() => {
                   if (plan && !confirm("Write a new plan? This replaces the current options, photos and renders.")) return
                   generate()
                 }}>
@@ -584,10 +592,9 @@ export function SocialStudio() {
                 {busy === "render" && <span className="text-sm text-on-surface-variant">3 of 3 · Rendering every size.</span>}
               </div>
             ) : (
-              <p className="text-sm text-on-surface-variant">Only editors can generate posts.</p>
+              <p className="text-sm text-on-surface-variant" data-tour="social-generate">Only editors can generate posts.</p>
             )}
-          </>
-        )}
+        </fieldset>
         <ErrorText>{error}</ErrorText>
       </div>
 

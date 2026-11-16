@@ -195,10 +195,12 @@ export function OnboardingTour() {
  * time (remembered per user under `storageKey`) and on the Guide button while
  * `active`.
  */
-export function GuidedTour({ steps, storageKey, active }: {
+export function GuidedTour({ steps, storageKey, active, closeWhenInactive = false }: {
   steps: Step[]
   storageKey: (userId: string) => string
   active: boolean
+  /** Hide (without marking it seen) when `active` turns false, e.g. another tab's guide takes over */
+  closeWhenInactive?: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -240,6 +242,8 @@ export function GuidedTour({ steps, storageKey, active }: {
     try { seen = !!localStorage.getItem(storageKey(userId)) } catch {}
     if (!seen) restart()
   }, [userId, active, storageKey, restart])
+
+  useEffect(() => { if (closeWhenInactive && !active) setOpen(false) }, [closeWhenInactive, active])
 
   // Guide button
   useEffect(() => {

@@ -593,6 +593,7 @@ function PlanDemo() {
 type Tab = "triage" | "comment" | "plan" | "social"
 
 const labSeenKey = (userId: string) => `content-calendar:lab-guide-seen:v1:${userId}`
+const socialSeenKey = (userId: string) => `content-calendar:social-guide-seen:v1:${userId}`
 
 export function AiLab() {
   const params = useSearchParams()
@@ -613,12 +614,13 @@ export function AiLab() {
     {
       route: "/lab",
       target: "lab-tabs",
-      title: "Three demos",
+      title: "Four tabs",
       body: "Each tab shows one way Claude and Jev help.",
       bullets: [
         "Sort an idea: Jev sorts a new idea as you type.",
         "Comment to action: a teammate's comment becomes a one-click action.",
         "Check a plan: Claude drafts a plan and Jev checks every item.",
+        "Social posts: a calendar entry and its brief become ready-to-post graphics. It has its own guide the first time you open it.",
       ],
     },
     {
@@ -677,6 +679,76 @@ export function AiLab() {
     },
   ], [])
 
+  // Its own guide: opens the first time anyone clicks the Social posts tab
+  const socialSteps = useMemo<Step[]>(() => {
+    const onEnter = () => setTab("social")
+    return [
+      {
+        route: "/lab",
+        onEnter,
+        title: "Social posts",
+        body: "Turn a calendar entry into ready-to-post graphics and captions, in the Threecolts look. A post takes about three minutes, most of it waiting.",
+        bullets: [
+          "Claude writes three different design options, with captions for each platform.",
+          "Real photos come from Unsplash: Jev filters out stock-looking ones, Claude picks. No AI images.",
+          "You approve one option and download a zip. Nothing here changes the calendar.",
+        ],
+      },
+      {
+        route: "/lab",
+        target: "social-entry",
+        onEnter,
+        title: "1. Pick the calendar entry",
+        body: "Search for the post you planned in the calendar. Its date and channel come with it.",
+      },
+      {
+        route: "/lab",
+        target: "social-brief",
+        onEnter,
+        title: "2. Give it the brief",
+        body: "Upload your Google Doc as a Word file, or paste its text.",
+        bullets: [
+          "In Google Docs: File → Download → Microsoft Word (.docx), then Upload .docx here.",
+          "The whole campaign Doc is fine. Claude uses the part for this entry and tells you which part it used.",
+          "Copy you've already written in the Doc (headline, sub-line, offer terms) is kept, not rewritten.",
+        ],
+      },
+      {
+        route: "/lab",
+        target: "social-setup",
+        onEnter,
+        title: "3. Platforms and post type",
+        body: "Pick where it's going and whether it's a single image, a carousel or a story. Sizes follow: portrait and square for feed posts, a story for the strongest option, landscape when X or LinkedIn is picked.",
+        bullets: ["Direction (optional) is for anything the Doc doesn't say, like which audience block to use or a mood."],
+      },
+      {
+        route: "/lab",
+        target: "social-generate",
+        onEnter,
+        title: "4. Write three options",
+        body: "One click runs everything: Claude writes the options, photos are found on Unsplash, and every size is rendered. Leave the tab open while it works.",
+      },
+      {
+        route: "/lab",
+        onEnter,
+        title: "5. Review, approve, download",
+        body: "When it's done, each option shows its images and why it exists.",
+        bullets: [
+          "Read Check before posting first: any claim, number or word that isn't in your brief is listed there.",
+          "Don't like a photo? Find another, or Upload my own. Don't like the copy? New copy rewrites one option.",
+          "Approve the one you want, edit the captions (character counts are shown), then Download zip: every size, captions.md and photo credits.",
+        ],
+      },
+      {
+        route: "/lab",
+        target: "lab-guide",
+        onEnter,
+        title: "That's it",
+        body: "Replay this guide any time from this button while you're on the Social posts tab.",
+      },
+    ]
+  }, [])
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-5xl mx-auto flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -685,7 +757,7 @@ export function AiLab() {
             <FlaskConical className="h-6 w-6" /> Lab
           </h1>
           <Button variant="secondary" size="sm" onClick={() => window.dispatchEvent(new Event(OPEN_GUIDE_EVENT))} data-tour="lab-guide">
-            <Compass className="h-3.5 w-3.5" /> How the Lab works
+            <Compass className="h-3.5 w-3.5" /> {tab === "social" ? "How Social posts works" : "How the Lab works"}
           </Button>
         </div>
         <p className="text-sm text-on-surface-variant max-w-2xl">
@@ -732,7 +804,8 @@ export function AiLab() {
       {tab === "plan" && <PlanDemo />}
       {tab === "social" && <SocialStudio />}
 
-      <GuidedTour steps={steps} storageKey={labSeenKey} active />
+      <GuidedTour steps={steps} storageKey={labSeenKey} active={tab !== "social"} closeWhenInactive />
+      <GuidedTour steps={socialSteps} storageKey={socialSeenKey} active={tab === "social"} closeWhenInactive />
     </div>
   )
 }
