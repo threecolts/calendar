@@ -620,7 +620,7 @@ export function AiLab() {
         "Sort an idea: Jev sorts a new idea as you type.",
         "Comment to action: a teammate's comment becomes a one-click action.",
         "Check a plan: Claude drafts a plan and Jev checks every item.",
-        "Social posts: a calendar entry and its brief become ready-to-post graphics. It has its own guide the first time you open it.",
+        "Social posts: a calendar entry and its brief become ready-to-post graphics. It walks you through itself whenever you open it.",
       ],
     },
     {
@@ -744,7 +744,7 @@ export function AiLab() {
         target: "lab-guide",
         onEnter,
         title: "That's it",
-        body: "Replay this guide any time from this button while you're on the Social posts tab.",
+        body: "This guide opens each time you come to Social posts. Close it whenever you like, and replay it from this button.",
       },
     ]
   }, [])
@@ -805,7 +805,7 @@ export function AiLab() {
       {tab === "social" && <SocialStudio />}
 
       <GuidedTour steps={steps} storageKey={labSeenKey} active={tab !== "social"} closeWhenInactive />
-      <GuidedTour steps={socialSteps} storageKey={socialSeenKey} active={tab === "social"} closeWhenInactive />
+      <GuidedTour steps={socialSteps} storageKey={socialSeenKey} active={tab === "social"} closeWhenInactive autoOpen="every-time" />
     </div>
   )
 }

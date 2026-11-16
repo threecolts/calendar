@@ -195,12 +195,14 @@ export function OnboardingTour() {
  * time (remembered per user under `storageKey`) and on the Guide button while
  * `active`.
  */
-export function GuidedTour({ steps, storageKey, active, closeWhenInactive = false }: {
+export function GuidedTour({ steps, storageKey, active, closeWhenInactive = false, autoOpen = "first-visit" }: {
   steps: Step[]
   storageKey: (userId: string) => string
   active: boolean
   /** Hide (without marking it seen) when `active` turns false, e.g. another tab's guide takes over */
   closeWhenInactive?: boolean
+  /** "first-visit": once per person; "every-time": whenever `active` turns on */
+  autoOpen?: "first-visit" | "every-time"
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -233,15 +235,18 @@ export function GuidedTour({ steps, storageKey, active, closeWhenInactive = fals
 
   const close = useCallback(() => { setOpen(false); markSeen() }, [markSeen])
 
-  // First visit: open automatically, once, for anyone who hasn't seen it
+  // First visit: open automatically, once, for anyone who hasn't seen it.
+  // "every-time": open from step 1 each time `active` turns on.
   const autoOpened = useRef(false)
   useEffect(() => {
-    if (!userId || !active || autoOpened.current) return
+    if (!active) { if (autoOpen === "every-time") autoOpened.current = false; return }
+    if (!userId || autoOpened.current) return
     autoOpened.current = true
+    if (autoOpen === "every-time") { restart(); return }
     let seen = true
     try { seen = !!localStorage.getItem(storageKey(userId)) } catch {}
     if (!seen) restart()
-  }, [userId, active, storageKey, restart])
+  }, [userId, active, storageKey, restart, autoOpen])
 
   useEffect(() => { if (closeWhenInactive && !active) setOpen(false) }, [closeWhenInactive, active])
 
