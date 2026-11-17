@@ -13,6 +13,7 @@ import { OPEN_GUIDE_EVENT } from "@/components/onboarding-tour"
 
 const NAV = [
   { label: "Inbox",     href: "/inbox" },
+  { label: "Requests",  href: "/requests" },
   { label: "Calendar",  href: "/" },
   { label: "Campaigns", href: "/campaigns" },
   { label: "Library",   href: "/library" },
