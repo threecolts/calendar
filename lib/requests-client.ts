@@ -1,6 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useStore } from "@/lib/store"
 import type { Request, RequestFields, RequestUpdate } from "@/lib/requests"
 
 export class RequestsNotSetUp extends Error {}
@@ -63,4 +65,12 @@ export async function parseRequestText(text: string): Promise<{
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || "Couldn't read that request")
   return data
+}
+
+/** Requests in the current team view, loaded once per page ([] if 014 hasn't run) */
+export function useTeamRequests(): Request[] {
+  const { inTeamView } = useStore()
+  const [all, setAll] = useState<Request[]>([])
+  useEffect(() => { listRequests().then(setAll).catch(() => setAll([])) }, [])
+  return all.filter(r => inTeamView(r.team_id))
 }

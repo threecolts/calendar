@@ -54,6 +54,24 @@ export async function listAssets(campaignId: string): Promise<CampaignAsset[]> {
   return rows
 }
 
+/** Assets across many campaigns (the Library); [] if 013 hasn't run */
+export async function listAssetsForCampaigns(campaignIds: string[], sections: AssetSection[]): Promise<CampaignAsset[]> {
+  if (!campaignIds.length) return []
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("campaign_assets").select("*").in("campaign_id", campaignIds).in("section", sections)
+    .order("created_at", { ascending: false })
+  if (error) return []
+  const rows = (data ?? []) as CampaignAsset[]
+  const paths = rows.map(r => r.path).filter((p): p is string => !!p)
+  if (paths.length) {
+    const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 60 * 60)
+    const map = new Map((signed ?? []).map(s => [s.path, s.signedUrl]))
+    for (const r of rows) if (r.path) r.src = map.get(r.path) ?? null
+  }
+  return rows
+}
+
 export async function uploadAsset(campaignId: string, section: AssetSection, file: File, userId: string | null) {
   const supabase = createClient()
   const safe = file.name.replace(/[^\w.\-]+/g, "-").slice(-80)

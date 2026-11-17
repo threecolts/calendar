@@ -8,7 +8,7 @@ import { Button, PageHeader } from "@/components/kit"
 
 const socialSeenKey = (userId: string) => `content-calendar:social-guide-seen:v1:${userId}`
 
-/** Social: a calendar entry and its brief become ready-to-post graphics. Walks you through itself every visit. */
+/** Social: a calendar entry and its brief become ready-to-post graphics. "How Social works" opens the walkthrough. */
 export function SocialPage() {
   const steps = useMemo<Step[]>(() => {
     return [
@@ -66,7 +66,7 @@ export function SocialPage() {
         route: "/social",
         target: "social-guide",
         title: "That's it",
-        body: "This guide opens each time you come to Social. Close it whenever you like, and replay it from this button.",
+        body: "Replay this guide any time from this button.",
       },
     ]
   }, [])
@@ -83,7 +83,7 @@ export function SocialPage() {
         }
       />
       <SocialStudio />
-      <GuidedTour steps={steps} storageKey={socialSeenKey} active autoOpen="every-time" />
+      <GuidedTour steps={steps} storageKey={socialSeenKey} active autoOpen="never" />
     </div>
   )
 }

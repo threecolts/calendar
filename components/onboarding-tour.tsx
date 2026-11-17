@@ -201,8 +201,8 @@ export function GuidedTour({ steps, storageKey, active, closeWhenInactive = fals
   active: boolean
   /** Hide (without marking it seen) when `active` turns false, e.g. another tab's guide takes over */
   closeWhenInactive?: boolean
-  /** "first-visit": once per person; "every-time": whenever `active` turns on */
-  autoOpen?: "first-visit" | "every-time"
+  /** "first-visit": once per person; "every-time": whenever `active` turns on; "never": only from the Guide button */
+  autoOpen?: "first-visit" | "every-time" | "never"
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -240,7 +240,7 @@ export function GuidedTour({ steps, storageKey, active, closeWhenInactive = fals
   const autoOpened = useRef(false)
   useEffect(() => {
     if (!active) { if (autoOpen === "every-time") autoOpened.current = false; return }
-    if (!userId || autoOpened.current) return
+    if (!userId || autoOpened.current || autoOpen === "never") return
     autoOpened.current = true
     if (autoOpen === "every-time") { restart(); return }
     let seen = true

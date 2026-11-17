@@ -19,6 +19,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button, SegmentedControl, buttonCls, cx, fieldSmCls, linkCls } from "@/components/kit"
 import { ContentItemChip } from "@/components/content-item-chip"
+import { RequestChip } from "@/components/request-chip"
+import { useTeamRequests } from "@/lib/requests-client"
 import { ContentItemDialog } from "@/components/content-item-dialog"
 import { ImportPlanDialog } from "@/components/import-plan-dialog"
 import { ExportCalendarDialog } from "@/components/export-calendar-dialog"
@@ -260,6 +262,10 @@ export function ContentCalendar() {
 
   // ── item helpers ──────────────────────────────────────────────────────────
 
+  // Requests show on their due date (Requests tab, scripts/014)
+  const requests = useTeamRequests()
+  const requestsForDate = (date: string) => requests.filter(r => r.due_date === date)
+
   const itemsForDate = (date: string) =>
     filtered.filter(item => item.publish_date === date && item.status !== "Idea")
 
@@ -392,6 +398,7 @@ export function ContentCalendar() {
               muted={outside}
             />
           ))}
+          {date && requestsForDate(date).map(r => <RequestChip key={r.id} request={r} muted={outside} />)}
         </div>
       </div>
     )
