@@ -346,11 +346,17 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
         const count = list.length + (sec.id === "social" ? social.length : 0)
         const preview = mode === "preview"
         if (preview && !count) return null
+        // Preview: the mood board's first piece runs the full page width; everything
+        // else sits below it as a smaller masonry grid
         const layout = sec.id === "video"
-          ? "grid grid-cols-1 sm:grid-cols-2 gap-4 [&>figure]:mb-0"
+          ? (preview ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 [&>figure]:mb-0" : "grid grid-cols-1 sm:grid-cols-2 gap-4 [&>figure]:mb-0")
+          : preview ? "columns-2 sm:columns-3 lg:columns-4 gap-3"
           : sec.id === "social" ? "columns-2 sm:columns-3 lg:columns-4 gap-3"
           : isBoard ? "columns-1 sm:columns-2 lg:columns-3 gap-3"
-          : preview ? "columns-1 sm:columns-2 lg:columns-3 gap-3" : "columns-1 sm:columns-2 lg:columns-4 gap-3"
+          : "columns-1 sm:columns-2 lg:columns-4 gap-3"
+        const hero = preview && isBoard ? list[0] : null
+        const rest = hero ? list.slice(1) : list
+        const openAsset = (a: CampaignAsset) => { const n = slides.findIndex(s => s.key === a.id); if (n >= 0) setPresenting(n); else setOpen(a) }
         return (
           <section key={sec.id} id={sec.id} className="flex flex-col gap-3 scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -361,11 +367,12 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
             </div>
             {editable && !preview && <AddControls campaignId={campaign.id} section={sec.id} accept={sec.accept} onAdded={load} />}
             {sec.id === "social" && <LabPosts posts={social} preview={preview} />}
-            {list.length > 0 ? (
+            {hero && <AssetTile asset={hero} big editable={false} onOpen={openAsset} onChanged={load} />}
+            {rest.length > 0 ? (
               <div className={layout}>
-                {list.map(a => <AssetTile key={a.id} asset={a} big={isBoard || preview} editable={editable && !preview} onOpen={a => { const n = slides.findIndex(s => s.key === a.id); if (n >= 0) setPresenting(n); else setOpen(a) }} onChanged={load} />)}
+                {rest.map(a => <AssetTile key={a.id} asset={a} big={isBoard || preview} editable={editable && !preview} onOpen={openAsset} onChanged={load} />)}
               </div>
-            ) : !preview && !(sec.id === "social" && social.length) && (
+            ) : hero ? null : !preview && !(sec.id === "social" && social.length) && (
               <div className="rounded-xl border-2 border-dashed border-outline-variant px-4 py-8 text-center text-sm text-on-surface-variant flex flex-col items-center gap-2">
                 <ImagePlus className="h-5 w-5" aria-hidden="true" />
                 {isBoard ? "No mood board yet." : `Nothing in ${sec.title.toLowerCase()} yet.`}
