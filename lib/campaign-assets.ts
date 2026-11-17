@@ -8,7 +8,7 @@ export type AssetSection = "moodboard" | "video" | "design" | "social"
 
 export const SECTIONS: { id: AssetSection; title: string; blurb: string; accept: string }[] = [
   { id: "moodboard", title: "Mood board", blurb: "The campaign's look and feel. Images, or a Figma, Milanote or Pinterest link.", accept: "image/*,application/pdf" },
-  { id: "video", title: "Videos", blurb: "Upload a video, or paste a YouTube, Vimeo, Loom, Frame.io or Google Drive link.", accept: "video/*" },
+  { id: "video", title: "Videos", blurb: "Paste a Google Drive link (best for big files: it plays right here), or a YouTube, Vimeo or Loom link, or upload a short video.", accept: "video/*" },
   { id: "design", title: "Design assets", blurb: "Agreed designs: key visuals, paid ads, statics, banners, thumbnails.", accept: "image/*,video/*,application/pdf" },
   { id: "social", title: "Socials", blurb: "Social posts for this campaign. Posts made in Lab → Social posts appear here on their own.", accept: "image/*,video/*" },
 ]
@@ -106,7 +106,15 @@ export function embedUrl(raw: string): string | null {
   }
   if (host === "vimeo.com") { const id = u.pathname.match(/^\/(\d+)/)?.[1]; return id ? `https://player.vimeo.com/video/${id}` : null }
   if (host.endsWith("loom.com")) { const id = u.pathname.match(/\/(?:share|embed)\/([\w-]+)/)?.[1]; return id ? `https://www.loom.com/embed/${id}` : null }
-  if (host === "drive.google.com") { const id = u.pathname.match(/\/file\/d\/([\w-]+)/)?.[1]; return id ? `https://drive.google.com/file/d/${id}/preview` : null }
+  // Google Drive: a file plays in Drive's own player; a folder shows as a grid.
+  // Viewers need access in Drive (e.g. "Anyone at Threecolts with the link").
+  if (host === "drive.google.com" || host === "docs.google.com") {
+    const folder = u.pathname.match(/\/folders\/([\w-]+)/)?.[1]
+    if (folder) return `https://drive.google.com/embeddedfolderview?id=${folder}#grid`
+    const id = u.pathname.match(/\/file\/(?:u\/\d+\/)?d\/([\w-]+)/)?.[1]
+      ?? (/^\/(open|uc)$/.test(u.pathname) ? u.searchParams.get("id") : null)
+    return id ? `https://drive.google.com/file/d/${id}/preview` : null
+  }
   if (host.endsWith("figma.com")) return `https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(raw)}`
   return null
 }
