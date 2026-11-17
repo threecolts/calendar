@@ -1,5 +1,6 @@
 import { createHash } from "crypto"
 import { createClient } from "@/lib/supabase/server"
+import { itemChannels } from "@/lib/database.types"
 import { readGoogleDoc } from "@/lib/google-doc"
 import { formatsFor, generatePlan, planToPostSpec, regenerateOption, type BriefInput, type ModelRun } from "@/lib/social/plan"
 import { PLATFORMS, POST_TYPES, type Platform, type PostType, type SocialPlan } from "@/lib/social/plan-schema"
@@ -63,11 +64,12 @@ function postIdFor(item: { title: string; publish_date: string | null }) {
 async function loadItem(supabase: Supabase, itemId: string) {
   const { data } = await supabase
     .from("content_items")
-    .select("id, title, publish_date, channel, format, notes, brief_url, campaign:campaigns(title)")
+    // "*" rather than a column list: `channels` (scripts/011) is there only once that migration has run
+    .select("*, campaign:campaigns(title)")
     .eq("id", itemId)
     .single()
   return data as unknown as {
-    id: string; title: string; publish_date: string | null; channel: string; format: string
+    id: string; title: string; publish_date: string | null; channel: string; channels?: string[] | null; format: string
     notes: string | null; brief_url: string | null; campaign: { title: string } | null
   } | null
 }
@@ -112,7 +114,7 @@ function briefFrom(item: NonNullable<Awaited<ReturnType<typeof loadItem>>>, docT
   return {
     title: item.title,
     publishDate: item.publish_date,
-    channel: item.channel,
+    channel: itemChannels(item).join(", "),
     format: item.format,
     campaign: item.campaign?.title ?? null,
     notes: item.notes,

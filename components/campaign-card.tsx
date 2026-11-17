@@ -2,7 +2,7 @@
 
 import { Calendar, FileText } from "lucide-react"
 import type { CampaignWithItems } from "@/lib/database.types"
-import { MOTION_ACCENTS, TYPE_ACCENTS, CHANNEL_ICONS, campaignColor } from "@/lib/database.types"
+import { MOTION_ACCENTS, TYPE_ACCENTS, CHANNEL_ICONS, campaignColor, itemChannels } from "@/lib/database.types"
 
 interface Props {
   campaign: CampaignWithItems
@@ -30,7 +30,7 @@ export function CampaignCard({ campaign, onClick }: Props) {
     new Date(s + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })
 
   // Used channels
-  const channels = [...new Set(items.map(i => i.channel).filter(Boolean))] as string[]
+  const channels = [...new Set(items.flatMap(i => itemChannels(i)).filter(Boolean))] as string[]
 
   return (
     <button

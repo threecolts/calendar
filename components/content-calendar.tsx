@@ -10,11 +10,11 @@ import {
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
 import { updateContentItemClient, moveContentItemsClient } from "@/lib/data-client"
-import type { ContentItemWithCampaign, ItemStatus } from "@/lib/database.types"
+import type { ContentChannel, ContentItemWithCampaign, ItemStatus } from "@/lib/database.types"
 import {
   CHANNEL_ICONS,
   CHANNEL_OPTIONS, MOTION_OPTIONS, STATUS_OPTIONS, PRODUCT_OPTIONS,
-  NO_CAMPAIGN_ID, AUDIENCE_SEGMENTS, campaignColor, channelBackground
+  NO_CAMPAIGN_ID, AUDIENCE_SEGMENTS, campaignColor, channelBackground, itemChannels
 } from "@/lib/database.types"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button, SegmentedControl, buttonCls, cx, fieldSmCls, linkCls } from "@/components/kit"
@@ -216,7 +216,7 @@ export function ContentCalendar() {
 
   const filtered = useMemo(() => allItems.filter(item => {
     if (filterCampaign !== "All" && item.campaign_id !== filterCampaign) return false
-    if (filterChannel  !== "All" && item.channel  !== filterChannel)     return false
+    if (filterChannel  !== "All" && !itemChannels(item).includes(filterChannel as ContentChannel)) return false
     if (filterAssignee !== "All" && item.assignee_id !== filterAssignee) return false
     if (filterMotion   !== "All" && item.campaign.motion !== filterMotion) return false
     if (filterProduct  !== "All" && item.campaign.product !== filterProduct) return false
@@ -515,7 +515,7 @@ export function ContentCalendar() {
                       {/* On phones the extra columns are hidden, so show them as a sub-line */}
                       <span className="sm:hidden flex items-center gap-1.5 text-xs text-on-surface-variant min-w-0">
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: campaignColor(item.campaign_id) }} aria-hidden="true" />
-                        <span className="truncate">{item.campaignTitle} · {CHANNEL_ICONS[item.channel] || ""} {item.channel} · {item.status}</span>
+                        <span className="truncate">{item.campaignTitle} · {itemChannels(item).map(c => `${CHANNEL_ICONS[c] || ""} ${c}`).join(", ")} · {item.status}</span>
                       </span>
                     </span>
                     {(item.audience_segments ?? []).length > 0 && (
@@ -536,7 +536,7 @@ export function ContentCalendar() {
                     <span className="hidden sm:inline text-xs text-on-surface-variant flex-shrink-0 w-20">{item.status}</span>
                     <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-on-surface-variant flex-shrink-0">
                       <span className="w-2 h-2 rounded-full" style={{ background: channelBackground(item.channel) }} aria-hidden="true" />
-                      {item.channel}
+                      {itemChannels(item).join(", ")}
                     </span>
                   </button>
                 </div>

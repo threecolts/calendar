@@ -90,7 +90,13 @@ export interface ContentItem {
   assignee_id: string | null
   publish_date: string | null
   sort_order: number
+  /** Primary channel — card colour and icon. Always channels[0] when channels is set. */
   channel: ContentChannel
+  /**
+   * Every channel the item is published on (scripts/011). Optional: missing
+   * before that migration has run. Read it through itemChannels(), not directly.
+   */
+  channels?: ContentChannel[] | null
   date_confidence: DateConfidence
   content_role: string | null
   contributors: Contributor[]
@@ -236,6 +242,33 @@ export const CHANNEL_COLORS: Record<string, string> = {
 
 export function channelBackground(channel: string | null | undefined): string {
   return (channel && CHANNEL_COLORS[channel]) || CHANNEL_COLORS.Other
+}
+
+/**
+ * Every channel an item goes out on, primary first. Falls back to the single
+ * `channel` when `channels` is missing (old rows, migration 011 not run yet)
+ * or stale (its first value no longer matches `channel`).
+ */
+export function itemChannels(item: { channel: string; channels?: readonly string[] | null }): ContentChannel[] {
+  const list = item.channels ?? []
+  if (list.length > 0 && list[0] === item.channel) return [...new Set(list)] as ContentChannel[]
+  return [item.channel as ContentChannel]
+}
+
+/**
+ * The `channel` + `channels` fields to save for a picked list (primary first).
+ * `channels` is only included when it carries more than `channel` does, or
+ * the item already had a list — so single-channel saves keep working before
+ * migration 011 has been run.
+ */
+export function channelFields(
+  picked: readonly ContentChannel[],
+  previous?: { channels?: readonly string[] | null } | null,
+): { channel: ContentChannel; channels?: ContentChannel[] } {
+  const list = [...new Set(picked)]
+  const channel = list[0] ?? "Other"
+  const hadList = (previous?.channels?.length ?? 0) > 0
+  return list.length > 1 || hadList ? { channel, channels: list.length ? list : [channel] } : { channel }
 }
 
 // ---- Option lists ----

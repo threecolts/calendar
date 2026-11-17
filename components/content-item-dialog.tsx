@@ -21,8 +21,9 @@ import type {
 } from "@/lib/database.types"
 import {
   STATUS_COLORS, STATUS_OPTIONS, CHANNEL_OPTIONS, FORMAT_OPTIONS, CONTRIBUTOR_ROLE_OPTIONS,
-  NO_CAMPAIGN_ID, AUDIENCE_SEGMENT_GROUPS, campaignColor,
+  NO_CAMPAIGN_ID, AUDIENCE_SEGMENT_GROUPS, campaignColor, itemChannels, channelFields,
 } from "@/lib/database.types"
+import { ChannelIcon } from "@/components/channel-icon"
 
 const NEW_CAMPAIGN_OPTION = "__new_campaign__"
 
@@ -40,7 +41,7 @@ const EMPTY_FORM = {
   title: "",
   status: "Planned" as ItemStatus,
   format: "Video" as ContentFormat,
-  channel: "YouTube" as ContentChannel,
+  channels: ["YouTube"] as ContentChannel[],
   assignee_id: null as string | null,
   publish_date: null as string | null,
   date_confidence: "Confirmed" as DateConfidence,
@@ -66,7 +67,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           title: item.title,
           status: item.status,
           format: item.format,
-          channel: item.channel,
+          channels: itemChannels(item),
           assignee_id: item.assignee_id,
           publish_date: item.publish_date,
           date_confidence: item.date_confidence,
@@ -120,6 +121,15 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
   const f = <K extends keyof typeof form>(key: K, val: typeof form[K]) =>
     setForm(prev => ({ ...prev, [key]: val }))
 
+  // Pick order is kept: the first channel is the primary one (card colour).
+  // The last channel can't be removed — an item always has one.
+  const toggleChannel = (c: ContentChannel) =>
+    setForm(prev => {
+      if (!prev.channels.includes(c)) return { ...prev, channels: [...prev.channels, c] }
+      if (prev.channels.length === 1) return prev
+      return { ...prev, channels: prev.channels.filter(x => x !== c) }
+    })
+
   // Only send segments when they changed, so saves keep working even before
   // the audience_segments column migration (scripts/008) has been run.
   const segmentsChanged =
@@ -140,7 +150,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           title: form.title.trim(),
           status: form.status,
           format: form.format,
-          channel: form.channel,
+          ...channelFields(form.channels),
           assignee_id: form.assignee_id,
           publish_date: form.publish_date || null,
           date_confidence: form.date_confidence,
@@ -162,7 +172,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           title: form.title.trim(),
           status: form.status,
           format: form.format,
-          channel: form.channel,
+          ...channelFields(form.channels, item),
           assignee_id: form.assignee_id,
           publish_date: form.publish_date || null,
           date_confidence: form.date_confidence,
@@ -177,7 +187,10 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
       await refreshCampaigns()
       handleClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save item")
+      const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? ""
+      setError(/channels/.test(msg)
+        ? "Several channels per item need a database update (scripts/011_item_channels.sql) that hasn't been run yet. Pick one channel for now."
+        : msg || "Failed to save item")
     } finally {
       setSaving(false)
     }
@@ -196,7 +209,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
         title: `${form.title.trim() || item.title} (copy)`,
         status: published ? "Planned" : form.status,
         format: form.format,
-        channel: form.channel,
+        ...channelFields(form.channels),
         assignee_id: form.assignee_id,
         publish_date: form.publish_date || null,
         date_confidence: form.date_confidence,
@@ -338,6 +351,37 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
                 )}
               </div>
 
+              {/* Channels — several when one post goes out on several accounts */}
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel>Channels</FieldLabel>
+                {isEditor ? (
+                  <>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Channels">
+                      {CHANNEL_OPTIONS.map(c => {
+                        const on = form.channels.includes(c)
+                        return (
+                          <Pill key={c} active={on} onClick={() => toggleChannel(c)} className="gap-1.5">
+                            <ChannelIcon channel={c} className="h-3 w-3" />
+                            {c}
+                          </Pill>
+                        )
+                      })}
+                    </div>
+                    {form.channels.length > 1 && (
+                      <p className="text-xs text-on-surface-variant">
+                        Card colour follows {form.channels[0]}, the first one picked.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm text-on-surface">
+                    {form.channels.map(c => (
+                      <span key={c} className="inline-flex items-center gap-1.5"><ChannelIcon channel={c} />{c}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 {/* Status */}
                 <div className="flex flex-col gap-1.5">
@@ -351,18 +395,6 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusDot }} aria-hidden="true" />
                       <span className="text-on-surface">{form.status}</span>
                     </div>
-                  )}
-                </div>
-
-                {/* Channel */}
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>Channel</FieldLabel>
-                  {isEditor ? (
-                    <select value={form.channel} onChange={e => f("channel", e.target.value as ContentChannel)} className={selectCls()}>
-                      {CHANNEL_OPTIONS.map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  ) : (
-                    <div className="py-2 text-sm text-on-surface">{form.channel}</div>
                   )}
                 </div>
 

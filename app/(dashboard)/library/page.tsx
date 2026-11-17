@@ -5,8 +5,8 @@ import Link from "next/link"
 import { Search, ExternalLink, Copy, Check } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { ListSkeleton } from "@/components/loading-skeletons"
-import type { CampaignWithItems } from "@/lib/database.types"
-import { CHANNEL_OPTIONS, CHANNEL_ICONS, NO_CAMPAIGN_ID, campaignColor } from "@/lib/database.types"
+import type { CampaignWithItems, ContentChannel } from "@/lib/database.types"
+import { CHANNEL_OPTIONS, CHANNEL_ICONS, NO_CAMPAIGN_ID, campaignColor, itemChannels } from "@/lib/database.types"
 
 /** Only real web links are rendered as links — never javascript: or other schemes. */
 function isWebUrl(url: string | null | undefined): url is string {
@@ -38,7 +38,7 @@ export default function LibraryPage() {
     [campaigns])
 
   const filtered = assets.filter(({ item, campaign: c }) => {
-    if (channel !== "All" && item.channel !== channel) return false
+    if (channel !== "All" && !itemChannels(item).includes(channel as ContentChannel)) return false
     if (campaign !== "All" && c.id !== campaign) return false
     if (search) {
       const q = search.toLowerCase()
@@ -109,7 +109,7 @@ export default function LibraryPage() {
                     {item.title}
                   </Link>
                   <span className="text-xs text-on-surface-variant truncate">
-                    {CHANNEL_ICONS[item.channel] || ""} {item.channel} · {item.format}
+                    {itemChannels(item).map(c => `${CHANNEL_ICONS[c] || ""} ${c}`).join(", ")} · {item.format}
                     {item.publish_date && ` · ${new Date(item.publish_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
                   </span>
                 </div>

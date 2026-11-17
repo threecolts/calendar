@@ -11,7 +11,7 @@ import {
 import type { CampaignWithItems, ContentItemWithCampaign, CampaignMotion, CampaignType } from "@/lib/database.types"
 import {
   MOTION_OPTIONS, TYPE_OPTIONS, PRODUCT_OPTIONS, campaignColor,
-  CHANNEL_ICONS, STATUS_COLORS, NO_CAMPAIGN_ID, parseDateString, toISODate,
+  CHANNEL_ICONS, STATUS_COLORS, NO_CAMPAIGN_ID, parseDateString, toISODate, itemChannels, channelFields,
 } from "@/lib/database.types"
 import { ContentItemDialog } from "@/components/content-item-dialog"
 import { Button, Field, OptionCard, Section, SegmentedControl, fieldCls, textareaCls } from "@/components/kit"
@@ -152,7 +152,7 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
         campaign_id: copy.id,
         title: it.title,
         format: it.format,
-        channel: it.channel,
+        ...channelFields(itemChannels(it), it),
         status: it.status === "Idea" ? "Idea" : "Planned",
         assignee_id: it.assignee_id,
         publish_date: move(it.publish_date),
@@ -323,7 +323,7 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
                         <span className="flex-1 min-w-0">
                           <span className="text-sm font-medium text-on-surface truncate block">{item.title}</span>
                           <span className="text-xs text-on-surface-variant">
-                            {CHANNEL_ICONS[item.channel] || ""} {item.channel}
+                            {itemChannels(item).map(c => `${CHANNEL_ICONS[c] || ""} ${c}`).join(", ")}
                             {item.publish_date && ` · ${new Date(item.publish_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
                           </span>
                         </span>
