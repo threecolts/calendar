@@ -27,7 +27,7 @@ interface Plan {
   options: PlanOption[]
   captions: { platform: Platform; text: string }[]
   flags: { text: string; reason: string }[]
-  meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string }
+  meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string; briefSource?: string; context?: { brief: boolean; nearby: number; visuals: number } }
   photo_log?: Record<string, { rounds: PickRound[]; note: string; error: string | null }>
 }
 interface Photo {
@@ -105,6 +105,14 @@ function unsplashCredit(fileName: string) {
   const m = fileName.replace(/\.[a-z0-9]+$/i, "").match(/^(.+)-([A-Za-z0-9_-]{11})-unsplash$/)
   if (!m) return { photographer: null, unsplash_id: null, file_name: fileName }
   return { photographer: m[1].split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "), unsplash_id: m[2], file_name: fileName }
+}
+
+const savedAgo = (iso: string) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return "just now"
+  if (m < 60) return `${m} min ago`
+  if (m < 60 * 24) return `${Math.round(m / 60)} h ago`
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
 }
 
 // ---- Entry picker ----
@@ -274,8 +282,10 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost, onChanged }: {
   )
 }
 
-function OptionCard({ post, option, itemId, editable, busy, error, onAction, onPost, onZoom }: {
+function OptionCard({ post, option, itemId, editable, busy, error, onAction, onPost, onZoom, campaign }: {
   post: SocialPost; option: PlanOption; itemId: string; editable: boolean; busy: string | null; error: string
+  /** The entry's campaign: approving saves the option to its Assets → Socials */
+  campaign: { id: string; title: string } | null
   onAction: (action: string, extra?: Record<string, unknown>) => void
   onPost: (p: SocialPost) => void
   onZoom: (r: Render) => void
@@ -355,8 +365,13 @@ function OptionCard({ post, option, itemId, editable, busy, error, onAction, onP
           </Button>
           {renders.length > 0 && (
             <Button size="sm" variant={approved ? "secondary" : "primary"} disabled={!!busy} onClick={() => onAction("approve", { option: approved ? null : option.option })}>
-              <Check className="h-3.5 w-3.5" /> {approved ? "Unapprove" : "Approve this option"}
+              <Check className="h-3.5 w-3.5" /> {approved ? "Unapprove" : campaign ? "Approve & save to campaign" : "Approve this option"}
             </Button>
+          )}
+          {approved && campaign && (
+            <a href={`/campaigns/${campaign.id}#social`} className={cx("text-xs inline-flex items-center gap-1", linkCls)}>
+              Saved in {campaign.title} → Assets → Socials <ExternalLink className="h-3 w-3" />
+            </a>
           )}
           <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setShowRegen(v => !v)}>
             <RefreshCw className="h-3.5 w-3.5" /> New copy
@@ -424,7 +439,7 @@ function Captions({ post, itemId, editable, onPost }: { post: SocialPost; itemId
 // ---- The tab ----
 
 export function SocialStudio() {
-  const { campaigns } = useStore() as { campaigns: CampaignWithItems[] }
+  const { campaigns, allCampaigns } = useStore() as { campaigns: CampaignWithItems[]; allCampaigns: CampaignWithItems[] }
   const isEditor = useIsEditor()
   const params = useSearchParams()
   const router = useRouter()
@@ -436,7 +451,21 @@ export function SocialStudio() {
 
   const [itemId, setItemId] = useState<string | null>(params.get("item"))
   const item = items.find(i => i.id === itemId) ?? null
+  // The entry's campaign, and whether it has a brief Claude can use (scripts/015)
+  const itemCampaign = item?.campaign_id ? allCampaigns.find(c => c.id === item.campaign_id) ?? null : null
+  const campaignBrief = !!itemCampaign?.brief?.trim()
   const [post, setPost] = useState<SocialPost | null>(null)
+  // Posts already started, newest first, in this team view
+  const [recentRows, setRecentRows] = useState<{ content_item_id: string; status: string; updated_at: string }[]>([])
+  useEffect(() => {
+    createClient().from("social_posts").select("content_item_id, status, updated_at").order("updated_at", { ascending: false }).limit(30)
+      .then(({ data }) => setRecentRows(data ?? []))
+  }, [post?.updated_at])
+  const recent = recentRows
+    .map(r => { const it = items.find(i => i.id === r.content_item_id); return it ? { id: it.id, title: it.title, status: r.status } : null })
+    .filter((r): r is { id: string; title: string; status: string } => !!r)
+    .slice(0, 8)
+
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState("")
@@ -515,6 +544,22 @@ export function SocialStudio() {
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-5">
+        {recent.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[13px] text-on-surface-variant">Pick up where you left off</p>
+            <div className="flex flex-wrap gap-1.5">
+              {recent.map(r => (
+                <button key={r.id} type="button" onClick={() => pick(r.id)}
+                  className={cx("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors max-w-full",
+                    itemId === r.id ? "bg-primary border-primary text-primary-foreground" : "border-outline-variant text-on-surface hover:border-on-surface/30")}>
+                  <span className="truncate max-w-[16rem]">{r.title}</span>
+                  <span className={cx(itemId === r.id ? "text-primary-foreground/70" : "text-on-surface-variant")}>{r.status === "approved" ? "approved" : r.status === "rendered" ? "rendered" : "planned"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div data-tour="social-entry">
           <Field label="1. Calendar entry">
             <EntryPicker items={items} value={itemId} onChange={pick} />
@@ -543,10 +588,14 @@ export function SocialStudio() {
         <fieldset disabled={!item} className={cx("flex flex-col gap-5 min-w-0", !item && "opacity-50 pointer-events-none select-none")}>
             <div data-tour="social-brief">
             <Field
-              label="2. The brief"
-              hint={briefNote || "Paste the Doc's text, or upload it: in Google Docs, File → Download → Microsoft Word (.docx). The whole campaign Doc is fine; Claude uses the part for this entry."}
+              label={campaignBrief ? "2. Anything specific to this post (optional)" : "2. The brief"}
+              hint={briefNote || (campaignBrief
+                ? `Claude already has the ${itemCampaign?.title ?? "campaign"} brief, its other entries and its mood board. Add only what's specific to this post, or leave it empty.`
+                : itemCampaign
+                  ? "Paste the Doc's text, or upload it (File → Download → Microsoft Word). Tip: add a Campaign brief to the campaign once and every post can skip this."
+                  : "Paste the Doc's text, or upload it: in Google Docs, File → Download → Microsoft Word (.docx). The whole campaign Doc is fine; Claude uses the part for this entry.")}
             >
-              <textarea value={brief} onChange={e => setBrief(e.target.value)} rows={6} className={textareaCls} placeholder="Paste the brief here" />
+              <textarea value={brief} onChange={e => setBrief(e.target.value)} rows={6} className={textareaCls} placeholder={campaignBrief ? "e.g. Use the speaker quote from Ben; lean on the 48-hour proof point." : "Paste the brief here"} />
               <div className="flex flex-wrap items-center gap-2">
                 <label className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-outline-variant text-[13px] font-medium cursor-pointer hover:border-on-surface/30">
                   <FileUp className="h-3.5 w-3.5" /> Upload .docx or .txt
@@ -590,7 +639,7 @@ export function SocialStudio() {
 
             {isEditor ? (
               <div className="flex flex-wrap items-center gap-3" data-tour="social-generate">
-                <Button disabled={!item || !!busy || !brief.trim() || (!platforms.length && postType !== "story")} onClick={() => {
+                <Button disabled={!item || !!busy || (!brief.trim() && !campaignBrief) || (!platforms.length && postType !== "story")} onClick={() => {
                   if (plan && !confirm("Write a new plan? This replaces the current options, photos and renders.")) return
                   generate()
                 }}>
@@ -619,9 +668,24 @@ export function SocialStudio() {
           )}
 
           <div className="rounded-2xl border border-border bg-card p-6 flex flex-col gap-3">
-            <h3 className="text-[17px] font-semibold text-on-surface">The angle</h3>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-[17px] font-semibold text-on-surface">The angle</h3>
+              <span className="text-xs text-on-surface-variant inline-flex items-center gap-1" title="Plans, photos, renders and captions save automatically">
+                <Check className="h-3 w-3" /> Saved {savedAgo(post.updated_at)}
+              </span>
+            </div>
             <p className="text-sm text-on-surface">{plan.angle}</p>
             <p className="text-xs text-on-surface-variant">Built from: {plan.source}</p>
+            {plan.meta?.context && (
+              <p className="text-xs text-on-surface-variant">
+                Using: {[
+                  plan.meta.context.brief && "the campaign brief",
+                  plan.meta.context.nearby > 0 && `${plan.meta.context.nearby} nearby campaign entr${plan.meta.context.nearby === 1 ? "y" : "ies"}`,
+                  plan.meta.context.visuals > 0 && `${plan.meta.context.visuals} mood board and key visual note${plan.meta.context.visuals === 1 ? "" : "s"}`,
+                  plan.meta.briefSource !== "campaign" && "your post brief",
+                ].filter(Boolean).join(", ") || "the calendar entry only"}
+              </p>
+            )}
             {(plan.flags.length > 0 || generalChecks.length > 0) && (
               <div className="flex flex-col gap-1.5 mt-1">
                 <p className="text-[13px] font-medium text-on-surface">Check before posting</p>
@@ -637,7 +701,7 @@ export function SocialStudio() {
 
           <div className="flex flex-col gap-4">
             {plan.options.map(o => (
-              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} error={optionError(o.option)} onAction={run} onPost={setPost} onZoom={setZoom} />
+              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} error={optionError(o.option)} onAction={run} onPost={setPost} onZoom={setZoom} campaign={itemCampaign ? { id: itemCampaign.id, title: itemCampaign.title } : null} />
             ))}
           </div>
 

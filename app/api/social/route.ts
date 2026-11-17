@@ -38,7 +38,7 @@ interface SocialPostRow {
   brief_text: string | null
   brief_hash: string | null
   plan: (SocialPlan & {
-    meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string; briefSource?: "pasted" | "doc" }
+    meta?: { platforms: Platform[]; postType: PostType; cards?: number; extra?: string; briefSource?: "pasted" | "doc" | "campaign"; context?: CampaignContextSummary }
     /** Per photo slot: search terms, Jev scores, shortlist, Claude's pick and reasons */
     photo_log?: Record<string, { rounds: PickRound[]; note: string; error: string | null; at: string }>
   }) | null
@@ -65,13 +65,59 @@ async function loadItem(supabase: Supabase, itemId: string) {
   const { data } = await supabase
     .from("content_items")
     // "*" rather than a column list: `channels` (scripts/011) is there only once that migration has run
-    .select("*, campaign:campaigns(title)")
+    .select("*, campaign:campaigns(*)")
     .eq("id", itemId)
     .single()
   return data as unknown as {
     id: string; title: string; publish_date: string | null; channel: string; channels?: string[] | null; format: string
-    notes: string | null; brief_url: string | null; campaign: { title: string } | null
+    notes: string | null; brief_url: string | null; campaign_id: string | null
+    campaign: {
+      id: string; title: string; objective: string | null; product: string | null; type: string | null; motion: string | null
+      start_date: string | null; end_date: string | null; brief?: string | null; brief_url?: string | null
+    } | null
   } | null
+}
+
+export interface CampaignContextSummary { brief: boolean; nearby: number; visuals: number }
+
+/**
+ * What Claude should know about the entry's campaign: its details and brief
+ * (scripts/015), the other entries around this date, and the names of the
+ * mood board and key visuals in its Assets. Empty when there's no campaign.
+ */
+async function campaignContextFor(supabase: Supabase, item: NonNullable<Awaited<ReturnType<typeof loadItem>>>) {
+  const c = item.campaign
+  if (!c) return { text: "", summary: { brief: false, nearby: 0, visuals: 0 } as CampaignContextSummary }
+
+  let brief = c.brief?.trim() ?? ""
+  if (!brief && c.brief_url) {
+    const doc = await readGoogleDoc(c.brief_url)
+    if (doc.status === "read" && doc.text) brief = doc.text.trim()
+  }
+
+  // Entries three weeks either side (or the whole campaign when undated)
+  const { data: items } = await supabase.from("content_items").select("id, title, channel, format, publish_date, status").eq("campaign_id", c.id)
+  const day = (d: string) => new Date(d + "T00:00:00Z").getTime()
+  const near = (items ?? [])
+    .filter(i => i.id !== item.id && i.status !== "Idea")
+    .filter(i => !item.publish_date || !i.publish_date || Math.abs(day(i.publish_date) - day(item.publish_date)) <= 21 * 864e5)
+    .sort((a, b) => (a.publish_date ?? "9999").localeCompare(b.publish_date ?? "9999"))
+    .slice(0, 30)
+
+  const { data: assets } = await supabase.from("campaign_assets").select("section, title, note").eq("campaign_id", c.id).in("section", ["moodboard", "design"])
+  const visuals = (assets ?? []).filter(a => a.title || a.note)
+
+  const text = [
+    `- **Campaign:** ${c.title}${c.type ? ` (${c.type}` : ""}${c.motion ? `, ${c.motion}` : ""}${c.type ? ")" : ""}`,
+    c.product ? `- **Product:** ${c.product}` : "",
+    c.objective ? `- **Objective:** ${c.objective}` : "",
+    c.start_date || c.end_date ? `- **Dates:** ${c.start_date ?? "?"} to ${c.end_date ?? "?"}` : "",
+    near.length ? `- **Other entries in the campaign around this date:**\n${near.map(i => `  - ${i.publish_date ?? "undated"}: ${i.title} (${i.channel}, ${i.format}, ${i.status})`).join("\n")}` : "",
+    visuals.length ? `- **Mood board and key visuals (Assets):**\n${visuals.map(a => `  - ${a.section === "moodboard" ? "Mood board" : "Design"}: ${[a.title, a.note].filter(Boolean).join(": ")}`).join("\n")}` : "",
+    brief ? `\n### Campaign brief\n<campaign_brief>\n${brief.slice(0, 30000)}\n</campaign_brief>` : "",
+  ].filter(Boolean).join("\n")
+
+  return { text, summary: { brief: !!brief, nearby: near.length, visuals: visuals.length } as CampaignContextSummary }
 }
 
 async function loadRow(supabase: Supabase, itemId: string) {
@@ -201,30 +247,36 @@ export async function POST(req: Request) {
       const cards = Math.min(8, Math.max(3, Number(body.cards) || 5))
       const extra = String(body.extra ?? "").trim().slice(0, 2000) || undefined
 
-      // The brief: text Angela pasted or uploaded (Threecolts Docs can't be shared
-      // publicly), else the entry's Doc link if Google lets us read it.
+      // The campaign's context (details, brief, nearby entries, visuals) always goes
+      // in. The post's own brief is optional when the campaign has a brief: text
+      // Angela pasted or uploaded, else the entry's Doc link if Google lets us read it.
       // Never generate from the title alone (BUILD-SPEC step 1).
+      const context = await campaignContextFor(supabase, item)
       const pasted = String(body.briefText ?? "").replace(/\r\n/g, "\n").trim().slice(0, MAX_BRIEF)
       let briefText = pasted
-      let briefSource: "pasted" | "doc" = "pasted"
+      let briefSource: "pasted" | "doc" | "campaign" = "pasted"
       if (!briefText) {
         const doc = item.brief_url ? await readGoogleDoc(item.brief_url) : null
-        if (doc?.status !== "read" || !doc.text?.trim()) {
-          return Response.json({ error: "Paste the brief's text, or upload the Doc as a .docx (File → Download → Microsoft Word)." }, { status: 400 })
+        if (doc?.status === "read" && doc.text?.trim()) { briefText = doc.text.trim(); briefSource = "doc" }
+        else if (context.summary.brief) briefSource = "campaign"
+        else {
+          return Response.json({ error: item.campaign
+            ? "Add a brief: paste it here, or add a campaign brief to the campaign (Campaigns → the campaign → Campaign brief) and it'll be used for every post."
+            : "Paste the brief's text, or upload the Doc as a .docx (File → Download → Microsoft Word)." }, { status: 400 })
         }
-        briefText = doc.text.trim()
-        briefSource = "doc"
       }
-      if (briefText.length < 40) return Response.json({ error: "The brief is too short to write from. Paste the whole Doc." }, { status: 400 })
+      if (briefSource !== "campaign" && briefText.length < 40 && !context.summary.brief) {
+        return Response.json({ error: "The brief is too short to write from. Paste the whole Doc." }, { status: 400 })
+      }
 
-      const meta = { platforms, postType, cards: postType === "carousel" ? cards : undefined, extra, briefSource }
-      const { plan, issues, runs } = await generatePlan(briefFrom(item, briefText, meta))
+      const meta = { platforms, postType, cards: postType === "carousel" ? cards : undefined, extra, briefSource, context: context.summary }
+      const { plan, issues, runs } = await generatePlan({ ...briefFrom(item, briefText, meta), campaignContext: context.text || undefined })
       const previous = await loadRow(supabase, itemId)
       const row = await saveRow(supabase, itemId, {
         status: "planned",
         brief_url: item.brief_url,
         brief_text: briefText,
-        brief_hash: hash(briefText),
+        brief_hash: hash(briefText + context.text),
         plan: { ...plan, meta },
         checks: issues,
         photos: {},
@@ -246,7 +298,8 @@ export async function POST(req: Request) {
     if (body.action === "regenerate") {
       const option = body.option as "A" | "B" | "C"
       if (!["A", "B", "C"].includes(option)) return Response.json({ error: "Which option?" }, { status: 400 })
-      const { plan, issues, runs } = await regenerateOption(briefFrom(item, row.brief_text ?? "", meta), row.plan, option, String(body.note ?? "").slice(0, 1000))
+      const context = await campaignContextFor(supabase, item)
+      const { plan, issues, runs } = await regenerateOption({ ...briefFrom(item, row.brief_text ?? "", meta), campaignContext: context.text || undefined }, row.plan, option, String(body.note ?? "").slice(0, 1000))
       // That option's photos and renders no longer match its copy
       const photos = Object.fromEntries(Object.entries(row.photos).filter(([k]) => !k.startsWith(`${option}-`)))
       const renders = row.renders.filter(r => r.option !== option)

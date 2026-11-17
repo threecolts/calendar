@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import {
-  ArrowLeft, Download, ExternalLink, FileText, ImagePlus, Link2, Loader2, Pencil, Sparkles, Trash2, Upload, X,
+  ArrowLeft, ChevronLeft, ChevronRight, Download, Play, ExternalLink, FileText, ImagePlus, Link2, Loader2, Pencil, Sparkles, Trash2, Upload, X,
 } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import {
@@ -11,7 +11,7 @@ import {
   type AssetSection, type CampaignAsset, type CampaignSocialPost,
 } from "@/lib/campaign-assets"
 import { campaignColor, parseDateString } from "@/lib/database.types"
-import { Button, ErrorText, cx, fieldSmCls, linkCls } from "@/components/kit"
+import { Button, ErrorText, SegmentedControl, cx, fieldSmCls, linkCls } from "@/components/kit"
 
 const niceDate = (d: string | null) => {
   if (!d) return "No date"
@@ -154,8 +154,21 @@ function AddControls({ campaignId, section, accept, onAdded }: { campaignId: str
   )
 }
 
-function LabPosts({ posts }: { posts: CampaignSocialPost[] }) {
+function LabPosts({ posts, preview }: { posts: CampaignSocialPost[]; preview?: boolean }) {
   if (!posts.length) return null
+  if (preview) {
+    // Preview: the posts as they'd sit on a feed, no chrome
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {posts.flatMap(p => p.frames.map(f => (
+          <figure key={f.name} className="flex flex-col gap-1">
+            {f.src ? <img src={f.src} alt={f.name} className="w-full h-auto rounded-xl border border-border" loading="lazy" /> : <span className="aspect-[4/5] rounded-xl bg-surface-container-high" />}
+            <figcaption className="text-[11px] text-on-surface-variant truncate">{p.itemTitle} · {niceDate(p.publishDate)}{p.approved ? "" : ` · option ${f.option}`}</figcaption>
+          </figure>
+        )))}
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[13px] font-medium text-on-surface flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> From Social</p>
@@ -181,6 +194,68 @@ function LabPosts({ posts }: { posts: CampaignSocialPost[] }) {
   )
 }
 
+/** One slide in the full-screen presentation */
+interface Slide { key: string; section: string; title: string; kind: "image" | "video" | "embed" | "link"; src: string }
+
+function buildSlides(assets: CampaignAsset[], social: CampaignSocialPost[]): Slide[] {
+  const out: Slide[] = []
+  for (const sec of SECTIONS) {
+    for (const a of assets.filter(x => x.section === sec.id)) {
+      const title = a.title || (a.kind === "link" ? host(a.url!) : "Untitled")
+      const embed = a.kind === "link" ? embedUrl(a.url!) : null
+      if (isImage(a) && a.src) out.push({ key: a.id, section: sec.title, title, kind: "image", src: a.src })
+      else if (isVideo(a) && a.src) out.push({ key: a.id, section: sec.title, title, kind: "video", src: a.src })
+      else if (embed) out.push({ key: a.id, section: sec.title, title, kind: "embed", src: embed })
+      else if (a.kind === "link") out.push({ key: a.id, section: sec.title, title, kind: "link", src: a.url! })
+      else if (a.src) out.push({ key: a.id, section: sec.title, title, kind: "link", src: a.src })
+    }
+    if (sec.id === "social") {
+      for (const p of social) for (const f of p.frames) {
+        if (f.src) out.push({ key: f.name, section: sec.title, title: `${p.itemTitle}${p.approved ? "" : ` · option ${f.option}`} · ${f.format}`, kind: "image", src: f.src })
+      }
+    }
+  }
+  return out
+}
+
+/** Full screen, one asset at a time: arrow keys or buttons, Esc to close */
+function Presenter({ slides, start, onClose }: { slides: Slide[]; start: number; onClose: () => void }) {
+  const [i, setI] = useState(start)
+  const s = slides[i]
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+      if (e.key === "ArrowRight" || e.key === " ") setI(n => Math.min(slides.length - 1, n + 1))
+      if (e.key === "ArrowLeft") setI(n => Math.max(0, n - 1))
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [slides.length, onClose])
+  if (!s) return null
+  return (
+    <div className="fixed inset-0 z-[60] bg-[#111] text-white flex flex-col" role="dialog" aria-label="Present assets">
+      <div className="flex items-center gap-3 px-5 py-3 text-sm">
+        <span className="text-white/60">{s.section}</span>
+        <span className="truncate">{s.title}</span>
+        <span className="ml-auto tabular-nums text-white/60">{i + 1} / {slides.length}</span>
+        <button type="button" onClick={onClose} aria-label="Close" className="h-8 w-8 grid place-items-center rounded-full bg-white/10 hover:bg-white/20"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="flex-1 min-h-0 grid place-items-center px-16 pb-6 relative">
+        {s.kind === "image" && <img key={s.key} src={s.src} alt={s.title} className="max-h-full max-w-full object-contain rounded-lg" />}
+        {s.kind === "video" && <video key={s.key} src={s.src} controls autoPlay className="max-h-full max-w-full rounded-lg" />}
+        {s.kind === "embed" && <iframe key={s.key} src={s.src} title={s.title} className="w-full max-w-5xl aspect-video rounded-lg border-0 bg-black" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />}
+        {s.kind === "link" && (
+          <a href={s.src} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-white/10 hover:bg-white/15 px-6 py-5 text-lg inline-flex items-center gap-2">
+            {s.title} <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+        <button type="button" disabled={i === 0} onClick={() => setI(n => n - 1)} aria-label="Previous" className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 grid place-items-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
+        <button type="button" disabled={i === slides.length - 1} onClick={() => setI(n => n + 1)} aria-label="Next" className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 grid place-items-center rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
+      </div>
+    </div>
+  )
+}
+
 /** The campaign's visual assets page: mood board first, then videos, design assets and socials */
 export function CampaignAssets({ campaignId }: { campaignId: string }) {
   const { allCampaigns, teams, canEditTeam } = useStore()
@@ -194,6 +269,9 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
   const [state, setState] = useState<"loading" | "ready" | "not-set-up" | "error">("loading")
   const [error, setError] = useState("")
   const [open, setOpen] = useState<CampaignAsset | null>(null)
+  // Preview is how the team looks at a campaign; Manage is for adding and removing
+  const [mode, setMode] = useState<"preview" | "manage">("preview")
+  const [presenting, setPresenting] = useState<number | null>(null)
 
   const itemKey = (campaign?.items ?? []).map(i => i.id).join(",")
   const load = useCallback(async () => {
@@ -210,6 +288,7 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId, itemKey])
   useEffect(() => { load() }, [load])
+  const slides = buildSlides(assets, social)
 
   if (!campaign) {
     return (
@@ -229,8 +308,21 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
           {teamName && <span className="rounded-full border border-outline-variant px-2.5 py-0.5 text-xs text-on-surface-variant">{teamName}</span>}
         </div>
         <p className="text-sm text-on-surface-variant max-w-2xl">
-          Assets for this campaign, in one place. {editable ? "Upload files or add links to each section." : teamName ? `Only ${teamName} can add or remove assets.` : "Only editors can add or remove assets."}
+          {mode === "preview"
+            ? "Everything for this campaign: the mood board, then videos, design assets and socials."
+            : `Upload files or add links to each section.${teamName ? ` Only ${teamName} can add or remove assets.` : ""}`}
         </p>
+        {state === "ready" && (
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            {editable && (
+              <SegmentedControl value={mode} onChange={setMode} ariaLabel="Mode"
+                options={[{ value: "preview", label: "Preview" }, { value: "manage", label: "Upload and manage" }]} />
+            )}
+            {slides.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setPresenting(0)}><Play className="h-3.5 w-3.5" /> Present</Button>
+            )}
+          </div>
+        )}
       </div>
 
       {state === "loading" && <p className="text-sm text-on-surface-variant flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading assets…</p>}
@@ -241,25 +333,39 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
       )}
       {state === "error" && <ErrorText>{error}</ErrorText>}
 
+      {state === "ready" && mode === "preview" && slides.length === 0 && (
+        <div className="rounded-xl border-2 border-dashed border-outline-variant px-4 py-14 text-center text-sm text-on-surface-variant flex flex-col items-center gap-2">
+          <ImagePlus className="h-5 w-5" aria-hidden="true" />
+          Nothing here yet.{editable && <button type="button" className={linkCls} onClick={() => setMode("manage")}>Upload the mood board</button>}
+        </div>
+      )}
+
       {state === "ready" && SECTIONS.map(sec => {
         const list = assets.filter(a => a.section === sec.id)
         const isBoard = sec.id === "moodboard"
         const count = list.length + (sec.id === "social" ? social.length : 0)
+        const preview = mode === "preview"
+        if (preview && !count) return null
+        const layout = sec.id === "video"
+          ? "grid grid-cols-1 sm:grid-cols-2 gap-4 [&>figure]:mb-0"
+          : sec.id === "social" ? "columns-2 sm:columns-3 lg:columns-4 gap-3"
+          : isBoard ? "columns-1 sm:columns-2 lg:columns-3 gap-3"
+          : preview ? "columns-1 sm:columns-2 lg:columns-3 gap-3" : "columns-1 sm:columns-2 lg:columns-4 gap-3"
         return (
           <section key={sec.id} id={sec.id} className="flex flex-col gap-3 scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="flex flex-col gap-0.5">
                 <h2 className={cx("font-semibold text-on-surface", isBoard ? "text-[22px]" : "text-[19px]")}>{sec.title} <span className="text-on-surface-variant font-normal text-sm">{count || ""}</span></h2>
-                <p className="text-sm text-on-surface-variant">{sec.blurb}</p>
+                {!preview && <p className="text-sm text-on-surface-variant">{sec.blurb}</p>}
               </div>
             </div>
-            {editable && <AddControls campaignId={campaign.id} section={sec.id} accept={sec.accept} onAdded={load} />}
-            {sec.id === "social" && <LabPosts posts={social} />}
+            {editable && !preview && <AddControls campaignId={campaign.id} section={sec.id} accept={sec.accept} onAdded={load} />}
+            {sec.id === "social" && <LabPosts posts={social} preview={preview} />}
             {list.length > 0 ? (
-              <div className={cx("gap-3", isBoard ? "columns-1 sm:columns-2 lg:columns-3" : "columns-1 sm:columns-2 lg:columns-4")}>
-                {list.map(a => <AssetTile key={a.id} asset={a} big={isBoard} editable={editable} onOpen={setOpen} onChanged={load} />)}
+              <div className={layout}>
+                {list.map(a => <AssetTile key={a.id} asset={a} big={isBoard || preview} editable={editable && !preview} onOpen={a => { const n = slides.findIndex(s => s.key === a.id); if (n >= 0) setPresenting(n); else setOpen(a) }} onChanged={load} />)}
               </div>
-            ) : !(sec.id === "social" && social.length) && (
+            ) : !preview && !(sec.id === "social" && social.length) && (
               <div className="rounded-xl border-2 border-dashed border-outline-variant px-4 py-8 text-center text-sm text-on-surface-variant flex flex-col items-center gap-2">
                 <ImagePlus className="h-5 w-5" aria-hidden="true" />
                 {isBoard ? "No mood board yet." : `Nothing in ${sec.title.toLowerCase()} yet.`}
@@ -268,6 +374,8 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
           </section>
         )
       })}
+
+      {presenting !== null && <Presenter slides={slides} start={presenting} onClose={() => setPresenting(null)} />}
 
       {open?.src && (
         <div className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-6" onClick={() => setOpen(null)}>

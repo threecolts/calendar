@@ -39,6 +39,9 @@ export interface Campaign {
   end_date: string | null
   /** Owning team (scripts/012); null = shared. Missing before that migration. */
   team_id?: string | null
+  /** The campaign's brief (scripts/015), given to Claude in the Social tab */
+  brief?: string | null
+  brief_url?: string | null
   created_at: string
   updated_at: string
 }

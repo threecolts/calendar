@@ -12,7 +12,10 @@ export interface BriefInput {
   format: string
   campaign: string | null
   notes: string | null
+  /** The post's own brief (pasted or uploaded); may be empty when the campaign has a brief */
   docText: string
+  /** The campaign: details, brief, nearby entries, mood board and key visuals (markdown) */
+  campaignContext?: string
   platforms: Platform[]
   postType: PostType
   cards?: number
@@ -28,6 +31,9 @@ export interface ModelRun {
   at: string
 }
 
+/** Everything a claim may be checked against: the post brief and the campaign */
+const allBriefs = (b: BriefInput) => `${b.docText}\n${b.campaignContext ?? ""}`
+
 /** Calendar fields mapped onto templates/weekly-brief.md; the Doc fills the rest */
 function briefMessage(b: BriefInput) {
   const type = b.postType === "carousel" ? `carousel (${b.cards ?? 5} cards)` : b.postType
@@ -41,8 +47,11 @@ function briefMessage(b: BriefInput) {
     b.notes ? `- **Notes on the calendar entry:** ${b.notes}` : "",
     b.extra ? `- **Extra direction from Angela:** ${b.extra}` : "",
     "",
-    "## How to use the Doc",
-    "- The Doc may cover a whole campaign (emails, several audiences, several posts). Use only the part this calendar entry is about; name it in `source`.",
+    b.campaignContext ? "## The campaign\nEvery post in this campaign is written from this. Fit this post into the sequence (what comes before and after it), don't repeat the nearby posts, and match the mood board and key visuals.\n\n" + b.campaignContext : "",
+    "",
+    "## How to use the brief",
+    b.docText.trim() ? "" : "- There is no post-specific brief: write from the campaign brief and the calendar entry. Name the part of the campaign brief you used in `source`.",
+    "- A brief may cover a whole campaign (emails, several audiences, several posts). Use only the part this calendar entry is about; name it in `source`.",
     "- If the Doc already has social copy for this post (a kicker, headline, sub-line, CTA, offer terms), that is Angela's approved copy: keep its words and facts, and vary the layout, photo and emphasis across the three options rather than rewriting it. Fix only what breaks the brand rules, and flag the change. If her copy uses a word brand.md bans (e.g. \"tools\"), keep her wording and flag it rather than rewriting it.",
     "- Offer terms, dates, prices and percentages: copy them exactly from the Doc. Anything not in the Doc goes in `flags`.",
     "- If the Doc doesn't say which product, audience or CTA, choose from the Doc's context and flag the assumption.",
@@ -53,10 +62,7 @@ function briefMessage(b: BriefInput) {
     "- These are posts, not ads: no buttons on the image (there is no CTA field), no price stickers, no discount as a giant stat. The brief's CTA and offer terms go in the captions; an offer can appear on the image only as a plain sentence.",
     `- Captions for: ${b.postType === "story" ? "none (stories get no caption)" : b.platforms.join(", ")}. Don't write character counts; the app counts.`,
     "",
-    "## The Doc",
-    "<doc>",
-    b.docText,
-    "</doc>",
+    b.docText.trim() ? "## The post brief\n<doc>\n" + b.docText + "\n</doc>" : "",
   ].filter(l => l !== "").join("\n")
 }
 
@@ -91,7 +97,7 @@ export async function generatePlan(b: BriefInput): Promise<{ plan: SocialPlan; i
       at: new Date().toISOString(),
     })
     plan = normalise(result.output)
-    issues = runChecks(plan, b.docText)
+    issues = runChecks(plan, allBriefs(b))
     if (!issues.some(i => i.severity === "error")) break
     messages.push({ role: "assistant", content: JSON.stringify(result.output) })
     messages.push({ role: "user", content: issuesMessage(issues.filter(i => i.severity === "error")) })
@@ -126,7 +132,7 @@ export async function regenerateOption(b: BriefInput, plan: SocialPlan, option: 
   const next = { ...plan, options: plan.options.map(o => (o.option === option ? replaced : o)) }
   return {
     plan: next,
-    issues: runChecks(next, b.docText),
+    issues: runChecks(next, allBriefs(b)),
     runs: [{
       step: `regenerate ${option}`,
       model: result.response.modelId,

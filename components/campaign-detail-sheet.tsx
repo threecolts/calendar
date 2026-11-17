@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { briefFileToText } from "@/lib/social/docx"
 
 import { useEffect, useState } from "react"
 import { Images, X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
@@ -16,7 +17,7 @@ import {
   CHANNEL_ICONS, STATUS_COLORS, NO_CAMPAIGN_ID, parseDateString, toISODate, itemChannels, channelFields,
 } from "@/lib/database.types"
 import { ContentItemDialog } from "@/components/content-item-dialog"
-import { Button, Field, OptionCard, Section, SegmentedControl, fieldCls, textareaCls } from "@/components/kit"
+import { Button, Field, OptionCard, Section, SegmentedControl, cx, fieldCls, textareaCls } from "@/components/kit"
 
 const TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
   Pillar:      "A big strategic bet.",
@@ -53,6 +54,11 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
   const [motion,    setMotion]    = useState<CampaignMotion>(campaign.motion)
   const [product,   setProduct]   = useState(campaign.product || "")
   const [objective, setObjective] = useState(campaign.objective || "")
+  // Campaign brief (scripts/015): only sent once that column exists
+  const hasBriefColumn = campaign.brief !== undefined
+  const [brief,     setBrief]     = useState(campaign.brief || "")
+  const [briefUrl,  setBriefUrl]  = useState(campaign.brief_url || "")
+  const [briefNote, setBriefNote] = useState("")
   const [endDate,   setEndDate]   = useState(campaign.end_date || "")
   const [saving,    setSaving]    = useState(false)
   const [selectedItem, setSelectedItem] = useState<ContentItemWithCampaign | null>(null)
@@ -112,6 +118,7 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
         title, type, motion, product, objective, end_date: endDate || null,
         // Moving a campaign to a team takes its items along (database trigger)
         ...(teams.length ? { team_id: teamId || null } : {}),
+        ...(hasBriefColumn ? { brief: brief.trim() || null, brief_url: briefUrl.trim() || null } : {}),
       })
       refreshCampaigns()
     } finally {
@@ -287,6 +294,27 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
             <Field label="Objective">
               <textarea value={objective} onChange={e => setObjective(e.target.value)} rows={3} className={textareaCls} />
             </Field>
+
+            {hasBriefColumn && (
+              <Field
+                label="Campaign brief"
+                hint={briefNote || "What it's for, who it's for, the offer, phases, key messages, CTAs. Social uses this for every post in the campaign, so each post only needs what's specific to it."}
+              >
+                <textarea value={brief} onChange={e => setBrief(e.target.value)} rows={6} className={textareaCls} placeholder="Paste the campaign brief or planning doc" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-outline-variant text-[13px] font-medium cursor-pointer hover:border-on-surface/30">
+                    Upload .docx or .txt
+                    <input type="file" accept=".docx,.txt,.md,text/plain" className="hidden" onChange={async e => {
+                      const f = e.target.files?.[0]; e.target.value = ""
+                      if (!f) return
+                      try { const text = await briefFileToText(f); setBrief(text); setBriefNote(`Loaded ${f.name}: ${text.length.toLocaleString()} characters. Save to keep it.`) }
+                      catch (err) { setBriefNote(err instanceof Error ? err.message : "Couldn't read that file") }
+                    }} />
+                  </label>
+                  <input type="url" value={briefUrl} onChange={e => setBriefUrl(e.target.value)} placeholder="Link to the Doc (optional)" className={cx(fieldCls, "flex-1 min-w-48 h-8")} />
+                </div>
+              </Field>
+            )}
 
             <Button onClick={handleSave} disabled={saving} className="self-start">
               {saving ? "Saving…" : "Save changes"}
