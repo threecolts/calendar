@@ -10,6 +10,7 @@ const FILES = [
   "CLAUDE.md",
   "system/look.md",
   "system/brand.md",
+  "system/brand-strategy.md",
   "system/photography.md",
   "system/captions.md",
   "system/formats.md",

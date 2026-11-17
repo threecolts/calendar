@@ -18,6 +18,11 @@ export interface PhotoRecord {
   photographer_url?: string | null
   unsplash_id?: string | null
   file_name?: string | null
+  /** Other photos that passed (Unsplash picks); swap one in with one click */
+  alternates?: {
+    url: string; thumb: string; unsplash_id: string; photographer: string; photographer_url: string
+    page: string; focus: string; reason: string; download_location: string
+  }[]
 }
 
 /** "jane-doe-AbC123xYz-unsplash.jpg" → { photographer: "Jane Doe", id: "AbC123xYz" } (photo_sheet.py's rule) */

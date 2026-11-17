@@ -7,7 +7,7 @@ import { PLATFORMS, POST_TYPES, type Platform, type PostType, type SocialPlan } 
 import { runChecks, type CheckIssue } from "@/lib/social/checks"
 import { buildZip, captionsMarkdown, creditsMarkdown, type PhotoRecord } from "@/lib/social/package"
 import { findPhoto, type PickRound } from "@/lib/social/photos"
-import { unsplashKey, UnsplashError } from "@/lib/social/unsplash"
+import { trackDownload, unsplashKey, UnsplashError } from "@/lib/social/unsplash"
 
 // Planning, photo picking and rendering each take 20–90 s
 export const maxDuration = 300
@@ -377,6 +377,32 @@ export async function POST(req: Request) {
         error: errors.length ? [...new Set(errors)].join(" ") : null,
       })
       return Response.json({ ...(await present(supabase, saved)), changed: [...changed] })
+    }
+
+    // ── Swap a photo slot to one of its alternates (Unsplash picks) ──
+    if (body.action === "swap") {
+      const slot = String(body.slot ?? "")
+      const index = Number(body.index)
+      const current = row.photos[slot]
+      const alt = current?.alternates?.[index]
+      if (!current || current.source !== "unsplash" || !alt) return Response.json({ error: "That alternate isn't there any more." }, { status: 400 })
+      // Unsplash's guidelines: count the download when a photo is actually used
+      if (alt.download_location) await trackDownload(alt).catch(() => {})
+      const previous = {
+        url: current.url!, thumb: current.thumb ?? "", unsplash_id: current.unsplash_id ?? "", photographer: current.photographer ?? "",
+        photographer_url: current.photographer_url ?? "", page: current.page ?? "", focus: current.focus ?? "50% 40%",
+        reason: current.reason ?? "", download_location: "", // already counted when it was first used
+      }
+      const others = (current.alternates ?? []).filter((_, i) => i !== index)
+      const photos = {
+        ...row.photos,
+        [slot]: {
+          source: "unsplash" as const, url: alt.url, thumb: alt.thumb, unsplash_id: alt.unsplash_id, photographer: alt.photographer,
+          photographer_url: alt.photographer_url, page: alt.page, focus: alt.focus, reason: alt.reason,
+          alternates: [previous, ...others],
+        },
+      }
+      return Response.json(await present(supabase, await saveRow(supabase, itemId, { photos })))
     }
 
     // ── Render one option, or all three ──

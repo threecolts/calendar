@@ -18,8 +18,23 @@ import type { PlanSlide } from "@/lib/social/plan-schema"
 const SHORTLIST = 12
 const JEV_POOL = 24
 
+/** A passing photo kept in reserve: one click swaps it in */
+export interface AlternatePhoto {
+  url: string
+  thumb: string
+  unsplash_id: string
+  photographer: string
+  photographer_url: string
+  page: string
+  focus: string
+  reason: string
+  download_location: string
+}
+
 export interface UnsplashPhoto {
   source: "unsplash"
+  /** Up to two other photos that passed; a closer, expressive one whenever this pick is wide */
+  alternates?: AlternatePhoto[]
   url: string
   thumb: string
   unsplash_id: string
@@ -52,6 +67,12 @@ const pickSchema = z.object({
   pick: z.number().nullable().describe("The number of the photo that passes every test in photography.md, or null if none does"),
   focus: z.string().describe('CSS background-position for the chosen photo, e.g. "55% 35%": eyes in the upper half, the lower third calm and darker for text'),
   reason: z.string().describe("One line: why this photo, or why nothing passed"),
+  pick_is_wide: z.boolean().describe("True if the pick is a wide shot (a whole room or place, the person small in the frame)"),
+  alternates: z.array(z.object({
+    photo: z.number().describe("Number of another photo that passes every test"),
+    focus: z.string().describe("CSS background-position for it"),
+    reason: z.string().describe("One line: what this one offers instead"),
+  })).describe("Up to 2 other photos that pass, best first. If the pick is wide, the first alternate MUST be a closer shot of a person whose face shows the moment. Empty if nothing else passes"),
   rejections: z.array(z.object({ photo: z.number(), reason: z.string() })).describe("One short line for each photo you rejected"),
   new_terms: z.array(z.string()).describe("If nothing passed: 3 new search terms (person, action, place, light). Otherwise empty"),
 })
@@ -120,6 +141,8 @@ async function claudePick(slide: PlanSlide, layout: string, list: Candidate[], f
       `The moment: ${slide.photo?.moment ?? ""}`,
       `Look for: ${slide.photo?.look_for ?? ""}`,
       `Skip: ${slide.photo?.skip ?? ""}`,
+      "Prefer a person whose face shows expression and motive (head and shoulders to waist up: focus, relief, a genuine smile) over an empty scene or hands only. Follow the visual personality in brand-strategy.md: warm, real, a friend who gets it; never busy, fearful or staged.",
+      "If you pick a wide shot, you must also give a closer alternate of a person whose face shows the moment. Give up to 2 alternates in any case.",
       "Don't settle: if nothing passes every test, return pick: null and three new search terms.",
     ].filter(Boolean).join("\n"),
   }]
@@ -183,9 +206,23 @@ export async function findPhoto(slide: PlanSlide, layout: string, formats: strin
     log.rejections = out.rejections.map(r => ({ id: list[r.photo - 1]?.id ?? String(r.photo), reason: r.reason }))
     if (chosen) {
       await trackDownload(chosen)
+      const focusOk = (f: string) => (/^\d{1,3}% \d{1,3}%$/.test(f.trim()) ? f.trim() : "50% 40%")
+      const alternates: AlternatePhoto[] = out.alternates
+        .flatMap(a => {
+          const c = a.photo >= 1 && a.photo <= list.length ? list[a.photo - 1] : null
+          return c && c.id !== chosen.id ? [{ a, c }] : []
+        })
+        .slice(0, 2)
+        .map(({ a, c }) => ({
+          url: renderUrl(c.raw), thumb: c.thumb, unsplash_id: c.id, photographer: c.photographer,
+          photographer_url: c.photographer_url, page: c.page, focus: focusOk(a.focus), reason: a.reason,
+          // Counted with Unsplash only if it's swapped in and used
+          download_location: c.download_location,
+        }))
       return {
         photo: {
           source: "unsplash",
+          alternates,
           url: renderUrl(chosen.raw),
           thumb: chosen.thumb,
           unsplash_id: chosen.id,

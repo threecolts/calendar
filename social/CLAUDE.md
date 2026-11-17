@@ -8,6 +8,7 @@ v0 has no image API. You write Unsplash search terms; Angela downloads the photo
 
 1. `system/look.md`: the look (OpenAI's Instagram is the base) and the three layouts.
 2. `system/brand.md`: colours, type, logos, product names, voice, banned words, claims.
+   `system/brand-strategy.md`: the personality (in your corner, calm in the storm, quietly expert, boldly playful) and how it looks.
 3. `system/photography.md`: how to write search terms and how to judge photos.
 4. `system/captions.md`: platform rules for captions.
 5. `system/formats.md`: sizes, safe zones, carousel rules, the spec file.

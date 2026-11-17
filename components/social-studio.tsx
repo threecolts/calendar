@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle, Check, Download, ExternalLink, ImagePlus, Loader2, RefreshCw, FileUp, Search, Sparkles, Trash2, X,
@@ -40,6 +40,8 @@ interface Photo {
   file_name?: string | null
   page?: string
   reason?: string
+  /** Other passing photos (a closer one when the pick is wide) */
+  alternates?: { thumb: string; photographer: string; reason: string; unsplash_id: string }[]
 }
 interface PickRound { terms: string[]; found: number; shortlist: unknown[]; pick: string | null; reason: string; engine: string }
 interface Render { name: string; option: string; format: string; path: string; url: string | null }
@@ -215,6 +217,17 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost, onChanged }: {
             </p>
           )}
           {photo?.source === "unsplash" && photo.reason && <p className="text-xs text-on-surface-variant">Why: {photo.reason}</p>}
+          {photo?.alternates && photo.alternates.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              <span className="text-xs text-on-surface-variant">Other options:</span>
+              {photo.alternates.map((a, i) => (
+                <button key={a.unsplash_id} type="button" disabled={!editable || !!busy} title={`${a.reason} (photo by ${a.photographer})`}
+                  onClick={() => call("save", { action: "swap", index: i }, true)}
+                  className="h-12 w-10 rounded-md bg-cover bg-center border border-outline-variant hover:ring-2 hover:ring-on-surface/30 disabled:opacity-60"
+                  style={{ backgroundImage: `url("${a.thumb}")` }} aria-label={`Use the photo by ${a.photographer} instead`} />
+              ))}
+            </div>
+          )}
           {photo?.source === "upload" && (photo.photographer
             ? <p className="text-xs text-on-surface-variant">Uploaded · by {photo.photographer}</p>
             : <p className="text-xs text-on-surface-variant">Uploaded · no credit in the file name</p>)}
@@ -523,8 +536,29 @@ export function SocialStudio() {
     finally { setBusy(null) }
   }
 
+  /**
+   * Opening a post that isn't finished finishes it: any photo slot that was never
+   * searched gets Unsplash photos, then anything unrendered renders. Once per post per visit.
+   */
+  const autoBuilt = useRef(new Set<string>())
+  useEffect(() => {
+    if (!post?.plan || !isEditor || busy || !itemId || autoBuilt.current.has(itemId)) return
+    autoBuilt.current.add(itemId)
+    const slots = post.plan.options.flatMap(o => o.slides.map((sl, i) => ({ slot: `${o.option}-${i + 1}`, sl })))
+      .filter(x => x.sl.layout === "fullbleed" || x.sl.layout === "framed")
+    const unsearched = slots.some(x => !post.photos[x.slot] && !post.plan?.photo_log?.[x.slot])
+    const unrendered = post.renders.length === 0
+    if (!(unsearched && post.unsplash) && !unrendered) return
+    ;(async () => {
+      if (unsearched && post.unsplash) await run("photos")
+      await run("render")
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, itemId])
+
   /** The whole thing, no manual steps: plan → photos from Unsplash → render every option */
   async function generate() {
+    if (itemId) autoBuilt.current.add(itemId)
     const planned = await run("plan", { platforms, postType, cards, extra, briefText: brief })
     if (!planned?.plan) return
     const needsPhotos = planned.plan.options.some(o => o.slides.some(s => s.layout === "fullbleed" || s.layout === "framed"))
