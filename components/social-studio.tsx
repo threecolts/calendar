@@ -7,7 +7,7 @@ import {
 } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { createClient } from "@/lib/supabase/client"
-import { NO_CAMPAIGN_ID, parseDateString, type CampaignWithItems, type ContentItem } from "@/lib/database.types"
+import { NO_CAMPAIGN_ID, parseDateString, itemChannels, type CampaignWithItems, type ContentItem } from "@/lib/database.types"
 import { ChannelIcon } from "@/components/channel-icon"
 import { briefFileToText } from "@/lib/social/docx"
 import { Button, ErrorText, Field, Pill, SegmentedControl, cx, fieldCls, linkCls, textareaCls } from "@/components/kit"
@@ -63,6 +63,7 @@ interface SocialPost {
 const PLATFORMS: Platform[] = ["Instagram", "LinkedIn", "X", "Facebook"]
 const CAPTION_LIMITS: Record<Platform, number> = { Instagram: 2200, LinkedIn: 1000, X: 280, Facebook: 600 }
 const SOCIAL_CHANNELS = new Set(["Instagram", "LinkedIn", "Twitter/X", "TikTok", "Other"])
+const isSocial = (i: ContentItem) => itemChannels(i).some(c => SOCIAL_CHANNELS.has(c))
 const FOCUS_PRESETS = [
   { label: "Top", value: "50% 20%" }, { label: "Upper", value: "50% 35%" }, { label: "Centre", value: "50% 50%" },
   { label: "Lower", value: "50% 70%" }, { label: "Left", value: "25% 45%" }, { label: "Right", value: "75% 45%" },
@@ -80,11 +81,11 @@ const niceDate = (d: string | null) => {
   try { return parseDateString(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) } catch { return d }
 }
 
-function defaultPlatforms(channel: string): Platform[] {
-  if (channel === "Instagram") return ["Instagram"]
-  if (channel === "LinkedIn") return ["LinkedIn"]
-  if (channel === "Twitter/X") return ["X"]
-  return ["Instagram", "LinkedIn"]
+/** Every social account the calendar item is planned for; Instagram + LinkedIn when it names none */
+function defaultPlatforms(channels: readonly string[]): Platform[] {
+  const map: Record<string, Platform> = { Instagram: "Instagram", LinkedIn: "LinkedIn", "Twitter/X": "X" }
+  const picked = PLATFORMS.filter(p => channels.some(c => map[c] === p))
+  return picked.length ? picked : ["Instagram", "LinkedIn"]
 }
 
 /** Shrink a photo to 2400 px on the long side (JPEG) before upload, so renders stay fast */
@@ -143,7 +144,7 @@ function EntryPicker({ items, value, onChange }: { items: (ContentItem & { campa
             <ChannelIcon channel={i.channel} />
             <span className="flex-1 min-w-0">
               <span className="block text-sm text-on-surface truncate">{i.title}</span>
-              <span className="block text-xs text-on-surface-variant truncate">{niceDate(i.publish_date)} · {i.channel} · {i.campaignTitle ?? "No campaign"}</span>
+              <span className="block text-xs text-on-surface-variant truncate">{niceDate(i.publish_date)} · {itemChannels(i).join(", ")} · {i.campaignTitle ?? "No campaign"}</span>
             </span>
             {value === i.id && <Check className="h-4 w-4 text-on-surface" />}
           </button>
@@ -431,7 +432,7 @@ export function SocialStudio() {
   type Entry = ContentItem & { campaignTitle: string | null }
   const items = useMemo<Entry[]>(() => campaigns.flatMap(c => c.items.map((i): Entry => ({ ...i, campaignTitle: c.id === NO_CAMPAIGN_ID ? null : c.title })))
     .filter(i => i.status !== "Idea")
-    .sort((a, b) => Number(SOCIAL_CHANNELS.has(b.channel)) - Number(SOCIAL_CHANNELS.has(a.channel))), [campaigns])
+    .sort((a, b) => Number(isSocial(b)) - Number(isSocial(a))), [campaigns])
 
   const [itemId, setItemId] = useState<string | null>(params.get("item"))
   const item = items.find(i => i.id === itemId) ?? null
@@ -468,7 +469,7 @@ export function SocialStudio() {
         setPost(d.post)
         const meta = d.post?.plan?.meta
         const it = items.find(i => i.id === itemId)
-        setPlatforms(meta?.platforms ?? defaultPlatforms(it?.channel ?? ""))
+        setPlatforms(meta?.platforms ?? defaultPlatforms(it ? itemChannels(it) : []))
         setPostType(meta?.postType ?? "single")
         setCards(meta?.cards ?? 5)
         setExtra(meta?.extra ?? "")
@@ -523,7 +524,7 @@ export function SocialStudio() {
 
         {item ? (
           <div className="flex flex-col gap-1">
-            <p className="text-sm text-on-surface"><span className="font-medium">{item.title}</span> · {niceDate(item.publish_date)} · {item.channel}</p>
+            <p className="text-sm text-on-surface"><span className="font-medium">{item.title}</span> · {niceDate(item.publish_date)} · {itemChannels(item).join(", ")}</p>
             {item.brief_url && (
               <a href={item.brief_url} target="_blank" rel="noopener noreferrer" className={cx("text-xs inline-flex items-center gap-1 self-start", linkCls)}>
                 Open the Google Doc <ExternalLink className="h-3 w-3" />

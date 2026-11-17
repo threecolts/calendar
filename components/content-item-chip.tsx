@@ -1,7 +1,7 @@
 "use client"
 
 import type { ContentItemWithCampaign } from "@/lib/database.types"
-import { campaignColor, channelBackground } from "@/lib/database.types"
+import { campaignColor, channelBackground, itemChannels } from "@/lib/database.types"
 import { ChannelIcon } from "@/components/channel-icon"
 
 interface Props {
@@ -17,11 +17,12 @@ interface Props {
  * Calendar chip — filled with its channel's colour (YouTube red, LinkedIn
  * blue, …), white text, no border. Title is capped at two lines (full title
  * on hover); the bottom line has the campaign dot + name and the platform
- * icon on the right. Provisional dates get a "TBC" tag; published items are
+ * icon(s) on the right — one per channel, the first (primary) sets the colour. Provisional dates get a "TBC" tag; published items are
  * faded.
  */
 export function ContentItemChip({ item, onClick, onDragStart, compact, muted }: Props) {
   const isProvisional = item.date_confidence === "Provisional"
+  const channels = itemChannels(item)
 
   return (
     <div
@@ -32,7 +33,7 @@ export function ContentItemChip({ item, onClick, onDragStart, compact, muted }: 
       onClick={onClick}
       onDragStart={onDragStart}
       onKeyDown={e => { if (e.key === "Enter") onClick() }}
-      title={`${item.channel} · ${item.title}\nCampaign: ${item.campaignTitle} · ${item.status}${isProvisional ? " (Provisional)" : ""}\nDrag to reschedule`}
+      title={`${channels.join(", ")} · ${item.title}\nCampaign: ${item.campaignTitle} · ${item.status}${isProvisional ? " (Provisional)" : ""}\nDrag to reschedule`}
       style={{ background: channelBackground(item.channel) }}
       className={`rounded-lg px-2.5 py-2 text-white cursor-grab active:cursor-grabbing select-none transition-[filter,opacity] hover:brightness-110 ${
         item.status === "Published" || muted ? "opacity-50" : ""
@@ -50,8 +51,9 @@ export function ContentItemChip({ item, onClick, onDragStart, compact, muted }: 
           {isProvisional && (
             <span className="flex-shrink-0 rounded-full bg-black/20 px-1.5 text-[10px] font-semibold leading-4">TBC</span>
           )}
-          <span className="flex-shrink-0" aria-label={item.channel}>
-            <ChannelIcon channel={item.channel} />
+          <span className="flex-shrink-0 flex items-center gap-1" aria-label={channels.join(", ")}>
+            {channels.slice(0, 3).map(c => <ChannelIcon key={c} channel={c} />)}
+            {channels.length > 3 && <span className="text-[10px] leading-none">+{channels.length - 3}</span>}
           </span>
         </span>
       )}

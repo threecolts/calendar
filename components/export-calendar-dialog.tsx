@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { X, FileText, Table2, Download } from "lucide-react"
 import type { ContentItemWithCampaign } from "@/lib/database.types"
-import { STATUS_COLORS } from "@/lib/database.types"
+import { STATUS_COLORS, itemChannels } from "@/lib/database.types"
 
 // ---- date helpers ----
 function toDS(d: Date) {
@@ -43,7 +43,7 @@ function buildCsv(items: ContentItemWithCampaign[]): string {
       it.title,
       it.campaignTitle,
       it.campaignMotion,
-      it.channel,
+      itemChannels(it).join("; "),
       it.format,
       it.status,
       it.assignee?.full_name || "Unassigned",
