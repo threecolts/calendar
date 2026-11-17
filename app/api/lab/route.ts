@@ -2,7 +2,7 @@ import { generateText, Output } from "ai"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { decide, type DecisionResult, type Question } from "@/lib/ai/decide"
-import { writerModel } from "@/lib/ai/models"
+import { steadySampling, writerModel } from "@/lib/ai/models"
 import { readGoogleDoc } from "@/lib/google-doc"
 import {
   AUDIENCE_SEGMENTS, CHANNEL_OPTIONS, FORMAT_OPTIONS, MOTION_OPTIONS, PRODUCT_OPTIONS, TYPE_OPTIONS,
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
 
       const { output: draft } = await generateText({
         model: writerModel,
-        temperature: 0,
+        ...steadySampling,
         output: Output.object({ schema: draftSchema }),
         prompt: [
           `Today is ${today}. Draft content marketing campaigns for a software company (Threecolts) from the material below.`,

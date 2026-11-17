@@ -1,7 +1,7 @@
 import { experimental_decide, generateText, Output } from "ai"
 import { createTypeSafeAi } from "@ai-sdk/typesafe-ai"
 import { z } from "zod"
-import { deciderLabel, deciderModel } from "@/lib/ai/models"
+import { deciderLabel, deciderModel, steadySampling } from "@/lib/ai/models"
 
 /**
  * Fast, structured decisions: hand over some context and a few questions with
@@ -113,7 +113,7 @@ async function decideWithStandIn(state: string, questions: Question[]): Promise<
 
   const { output } = await generateText({
     model: deciderModel,
-    temperature: 0,
+    ...steadySampling,
     output: Output.object({ schema: decisionSchema }),
     prompt,
   })

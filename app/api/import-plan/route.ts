@@ -3,8 +3,10 @@ import { createAnthropic } from "@ai-sdk/anthropic"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { PRODUCT_OPTIONS } from "@/lib/database.types"
+import { steadySampling } from "@/lib/ai/models"
 
-export const maxDuration = 60
+// Long plans take Claude a minute or more
+export const maxDuration = 180
 
 // Vercel AI Gateway model slug. Defaults to a free-tier model so this route
 // works with zero configuration; override in Vercel's project env vars (then
@@ -89,7 +91,9 @@ async function generateStructured<Schema extends z.ZodTypeAny>(
     try {
       const { output } = await generateText({
         model: MODEL,
-        temperature: 0,
+        ...steadySampling,
+        // Long plans (60+ items) need room; Claude allows far more
+        ...(anthropicKey ? { maxOutputTokens: 32000 } : {}),
         output: Output.object({ schema }),
         prompt,
       })
@@ -202,7 +206,7 @@ ${groupingRules}
 
 Content plan to parse:
 """
-${text.slice(0, 12000)}
+${text.slice(0, anthropicKey ? 30000 : 12000)}
 """`
 
   try {

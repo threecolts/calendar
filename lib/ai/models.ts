@@ -15,3 +15,9 @@ export const deciderModel = anthropic
   : process.env.AI_GATEWAY_MODEL || "inclusionai/ling-3.0-flash-fin"
 
 export const deciderLabel = anthropic ? "Claude Haiku 5.5" : "Free AI Gateway model"
+
+/**
+ * temperature 0 steadies the free gateway model, but current Claude models
+ * reject sampling parameters (400), so only send it when Claude isn't in use.
+ */
+export const steadySampling: { temperature?: number } = anthropic ? {} : { temperature: 0 }
