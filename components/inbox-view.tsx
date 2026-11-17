@@ -28,11 +28,17 @@ function timeAgo(iso: string) {
 }
 
 export function InboxView({ initialIdeas }: { initialIdeas: IdeaWithCreator[] }) {
-  const { currentUser } = useStore()
+  const { currentUser, teams, activeTeam, inTeamView, canEditTeam } = useStore()
   const isEditor = useIsEditor()
+  // Who it's for: the team in view by default. Anyone can send a request to any team.
+  const [sendTo, setSendTo] = useState<string>(activeTeam)
+  useEffect(() => setSendTo(activeTeam), [activeTeam])
+  const sendTeam = teams.find(t => t.id === sendTo) ?? null
+  const teamName = (id: string | null | undefined) => teams.find(t => t.id === id)?.name
   const { refreshCampaigns } = useRefreshData()
 
   const [ideas, setIdeas] = useState<IdeaWithCreator[]>(initialIdeas)
+  const shown = ideas.filter(i => inTeamView(i.team_id))
   const [title, setTitle] = useState("")
   const [notes, setNotes] = useState("")
   const [showNotes, setShowNotes] = useState(false)
@@ -55,7 +61,7 @@ export function InboxView({ initialIdeas }: { initialIdeas: IdeaWithCreator[] })
     if (!title.trim()) return
     setAdding(true)
     try {
-      await createIdeaClient({ title: title.trim(), notes: notes.trim() || null, createdById: currentUser?.id ?? null })
+      await createIdeaClient({ title: title.trim(), notes: notes.trim() || null, createdById: currentUser?.id ?? null, teamId: teams.length ? sendTeam?.id ?? null : undefined })
       setTitle("")
       setNotes("")
       setShowNotes(false)
@@ -106,7 +112,7 @@ export function InboxView({ initialIdeas }: { initialIdeas: IdeaWithCreator[] })
                 handleAdd()
               }
             }}
-            placeholder="Capture an idea… e.g. &quot;Customer story about X&quot;"
+            placeholder={sendTeam ? `Request for ${sendTeam.name}… e.g. "Key visuals for the UniCon webinar ads"` : "Capture an idea… e.g. \"Customer story about X\""}
             className="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container text-on-surface text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
           />
           <button
@@ -118,26 +124,43 @@ export function InboxView({ initialIdeas }: { initialIdeas: IdeaWithCreator[] })
             {adding ? "Adding…" : "Add"}
           </button>
         </div>
+        {showNotes && teams.length > 0 && (
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+            <label htmlFor="inbox-send-to">For</label>
+            <select
+              id="inbox-send-to"
+              value={sendTeam ? sendTeam.id : "all"}
+              onChange={e => setSendTo(e.target.value)}
+              className="h-7 rounded-full border border-outline-variant bg-transparent px-2 text-xs text-on-surface"
+            >
+              <option value="all">Everyone (main inbox)</option>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {sendTeam && <span>Only {sendTeam.name} can act on it; you can still edit it.</span>}
+          </div>
+        )}
         {showNotes && (
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
-            placeholder="Optional notes…"
-            rows={2}
+            placeholder={sendTeam
+              ? "What's it for? Where is it going (placement, channel)? Sizes / specs? Due date? Link to the brief."
+              : "Optional notes…"}
+            rows={sendTeam ? 4 : 2}
             className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container text-on-surface text-sm placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
           />
         )}
       </div>
 
       {/* Idea list */}
-      {ideas.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center rounded-2xl border-2 border-dashed border-outline-variant">
           <Lightbulb className="h-6 w-6 text-on-surface-variant" aria-hidden="true" />
-          <p className="text-sm text-on-surface-variant">No ideas yet. Capture the first one above.</p>
+          <p className="text-sm text-on-surface-variant">{teamName(activeTeam) ? `No requests for ${teamName(activeTeam)} yet.` : "No ideas yet. Capture the first one above."}</p>
         </div>
       ) : (
         <ul className="flex flex-col gap-2">
-          {ideas.map(idea => (
+          {shown.map(idea => (
             <li
               key={idea.id}
               data-tour="inbox-idea"
@@ -154,12 +177,13 @@ export function InboxView({ initialIdeas }: { initialIdeas: IdeaWithCreator[] })
                 )}
                 <p className="flex items-center gap-2 text-[11px] text-on-surface-variant mt-1">
                   <span>{idea.createdBy?.full_name ?? "Someone"} &middot; {timeAgo(idea.created_at)}</span>
+                  {teamName(idea.team_id) && <span className="rounded-full border border-outline-variant px-1.5">For {teamName(idea.team_id)}</span>}
                   {idea.brief_url && <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" /> Doc</span>}
                   <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" /> Open to comment</span>
                 </p>
               </button>
 
-              {isEditor && (
+              {isEditor && canEditTeam(idea.team_id) && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setPromoteIdea(idea)}

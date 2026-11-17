@@ -5,6 +5,7 @@ import { Camera, Loader2, Check, X } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { updateProfileClient, uploadAvatarClient } from "@/lib/data-client"
 import type { Profile } from "@/lib/database.types"
+import { useStore } from "@/lib/store"
 
 const roles = [
   "Admin",
@@ -29,6 +30,8 @@ export function EditMemberDialog({ member, open, onOpenChange, onSaved }: EditMe
   
   const [fullName, setFullName] = useState(member.full_name)
   const [role, setRole] = useState(member.role || "")
+  const { teams } = useStore()
+  const [teamId, setTeamId] = useState<string>(member.team_id ?? "")
   const [avatarUrl, setAvatarUrl] = useState(member.avatar_url)
   
   const [isSaving, setIsSaving] = useState(false)
@@ -72,8 +75,10 @@ export function EditMemberDialog({ member, open, onOpenChange, onSaved }: EditMe
     try {
       await updateProfileClient(member.id, {
         full_name: fullName.trim(),
-        role: role || "Team Member",
+        role: role.trim() || "Team Member",
         avatar_url: avatarUrl || null,
+        // Only once teams exist (scripts/012), so saving still works before then
+        ...(teams.length ? { team_id: teamId || null } : {}),
       })
       
       setSaved(true)
@@ -149,20 +154,41 @@ export function EditMemberDialog({ member, open, onOpenChange, onSaved }: EditMe
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-[13px] text-on-surface-variant">Role</label>
-              <select
+              <label htmlFor="member-title" className="text-[13px] text-on-surface-variant">Title</label>
+              {/* Free text: type any title, or pick a common one */}
+              <input
+                id="member-title"
+                list="member-title-options"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="px-4 py-3 bg-surface-container-lowest rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none text-on-surface appearance-none cursor-pointer"
-              >
-                <option value="">Select a role</option>
-                {roles.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                placeholder="e.g. Social Media Manager"
+                className="px-4 py-3 bg-surface-container-lowest rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none text-on-surface"
+              />
+              <datalist id="member-title-options">
+                {roles.map((r) => <option key={r} value={r} />)}
+              </datalist>
             </div>
+
+            {teams.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="member-team" className="text-[13px] text-on-surface-variant">Team</label>
+                <select
+                  id="member-team"
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  className="px-4 py-3 bg-surface-container-lowest rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none text-on-surface appearance-none cursor-pointer"
+                >
+                  <option value="">No team</option>
+                  {teams.filter(t => !t.parent_id).map(top => [
+                    <option key={top.id} value={top.id}>{top.name}</option>,
+                    ...teams.filter(t => t.parent_id === top.id).map(sub => (
+                      <option key={sub.id} value={sub.id}>{`${top.name} › ${sub.name}`}</option>
+                    )),
+                  ])}
+                </select>
+                <p className="text-xs text-on-surface-variant">Their default view when they open the calendar, and the team whose work they can change.</p>
+              </div>
+            )}
 
 
           </div>

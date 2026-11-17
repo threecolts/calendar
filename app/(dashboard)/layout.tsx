@@ -1,20 +1,22 @@
 export const dynamic = "force-dynamic"
 import { StoreProvider } from "@/lib/store"
 import { DashboardLayoutClient } from "@/components/dashboard-layout-client"
-import { getCampaignsWithItems, getProfiles, getSettings, getCurrentUserProfile } from "@/lib/data"
-import type { CampaignWithItems, Profile } from "@/lib/database.types"
+import { getCampaignsWithItems, getProfiles, getSettings, getCurrentUserProfile, getTeams } from "@/lib/data"
+import type { CampaignWithItems, Profile, Team } from "@/lib/database.types"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   let campaigns: CampaignWithItems[] = []
   let profiles: Profile[] = []
   let currentUser: Profile | null = null
   let settings: Record<string, string[]> = {}
+  let teams: Team[] = []
 
   try {
-    ;[campaigns, profiles, currentUser] = await Promise.all([
+    ;[campaigns, profiles, currentUser, teams] = await Promise.all([
       getCampaignsWithItems(),
       getProfiles(),
       getCurrentUserProfile(),
+      getTeams(),
     ])
     const rawSettings = await getSettings()
     settings = {
@@ -31,6 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       initialProfiles={profiles}
       initialCurrentUser={currentUser}
       initialSettings={settings}
+      initialTeams={teams}
     >
       <DashboardLayoutClient>{children}</DashboardLayoutClient>
     </StoreProvider>

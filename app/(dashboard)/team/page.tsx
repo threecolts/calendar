@@ -8,12 +8,15 @@ import { updateProfileClient } from "@/lib/data-client"
 import { TeamSkeleton } from "@/components/loading-skeletons"
 import { EditMemberDialog } from "@/components/edit-member-dialog"
 import { InviteMemberDialog } from "@/components/invite-member-dialog"
+import { TeamsManager } from "@/components/teams-manager"
 import { Avatar, Button, PageHeader, StatTile, cx } from "@/components/kit"
 import type { CampaignWithItems, Profile } from "@/lib/database.types"
 
 export default function TeamPage() {
   const store = useStore()
-  const teamMembers: Profile[] = store.teamMembers
+  // In a team view, only that team's people; everyone in the main view
+  const teamMembers: Profile[] = store.teamMembers.filter(m => store.activeTeam === "all" || store.inTeamView(m.team_id))
+  const teamName = (id: string | null | undefined) => store.teams.find(t => t.id === id)?.name
   const campaigns: CampaignWithItems[] = store.campaigns
   const { refreshProfiles } = useRefreshData()
   const [editingMember, setEditingMember] = useState<Profile | null>(null)
@@ -74,6 +77,7 @@ export default function TeamPage() {
                 <thead>
                   <tr className="bg-surface-container-low text-left text-[13px] text-on-surface-variant">
                     <th className="font-normal px-5 py-3">Name</th>
+                    {store.teams.length > 0 && <th className="font-normal px-4 py-3">Team</th>}
                     <th className="font-normal px-4 py-3">Access</th>
                     <th className="font-normal px-4 py-3 text-right">Assigned</th>
                     <th className="font-normal px-4 py-3 text-right">In progress</th>
@@ -100,6 +104,9 @@ export default function TeamPage() {
                             </span>
                           </div>
                         </td>
+                        {store.teams.length > 0 && (
+                          <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{teamName(member.team_id) ?? "—"}</td>
+                        )}
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleRoleToggle(member)}
@@ -131,6 +138,8 @@ export default function TeamPage() {
           </div>
         </>
       )}
+
+      <TeamsManager />
 
       <InviteMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       {editingMember && (

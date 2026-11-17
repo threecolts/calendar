@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useStore } from "@/lib/store"
-import { getCampaignsWithItemsClient, getProfilesClient } from "@/lib/data-client"
+import { getCampaignsWithItemsClient, getProfilesClient, getTeamsClient } from "@/lib/data-client"
 import type { CampaignWithItems, Profile } from "@/lib/database.types"
 
 export function DataProvider({
@@ -25,16 +25,26 @@ export function DataProvider({
 }
 
 export function useRefreshData() {
-  const { setCampaigns, setProfiles } = useStore()
+  const { setCampaigns, setProfiles, setTeams, currentUser, setCurrentUser } = useStore()
+  // Keep "me" in step with the profile list (e.g. after changing your own team)
+  const syncMe = (profiles: { id: string }[]) => {
+    const me = currentUser && profiles.find(p => p.id === currentUser.id)
+    if (me) setCurrentUser(me as typeof currentUser)
+  }
 
   const refreshAll = async () => {
-    const [campaigns, profiles] = await Promise.all([
+    const [campaigns, profiles, teams] = await Promise.all([
       getCampaignsWithItemsClient(),
       getProfilesClient(),
+      getTeamsClient(),
     ])
     setCampaigns(campaigns)
     setProfiles(profiles)
+    syncMe(profiles)
+    setTeams(teams)
   }
+
+  const refreshTeams = async () => setTeams(await getTeamsClient())
 
   const refreshCampaigns = async () => {
     const campaigns = await getCampaignsWithItemsClient()
@@ -44,7 +54,8 @@ export function useRefreshData() {
   const refreshProfiles = async () => {
     const profiles = await getProfilesClient()
     setProfiles(profiles)
+    syncMe(profiles)
   }
 
-  return { refreshAll, refreshCampaigns, refreshProfiles }
+  return { refreshAll, refreshCampaigns, refreshProfiles, refreshTeams }
 }

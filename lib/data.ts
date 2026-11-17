@@ -5,6 +5,7 @@ import type {
   ContentItem,
   ContentItemWithCampaign,
   Profile,
+  Team,
 } from "@/lib/database.types"
 import { NO_CAMPAIGN_ID, NO_CAMPAIGN_LABEL } from "@/lib/database.types"
 
@@ -130,6 +131,14 @@ export async function getIdeas(): Promise<import("@/lib/database.types").IdeaWit
 }
 
 // ---- Settings ----
+
+/** Teams, or [] if scripts/012 hasn't run yet */
+export async function getTeams(): Promise<Team[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from("teams").select("*").order("sort_order").order("name")
+  if (error) return []
+  return (data ?? []) as Team[]
+}
 
 export async function getSettings(): Promise<Record<string, unknown>> {
   const supabase = await createClient()

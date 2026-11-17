@@ -3,9 +3,11 @@
 import { useState } from "react"
 import { X } from "lucide-react"
 import { useRefreshData } from "@/components/data-provider"
+import { useStore } from "@/lib/store"
+import { similarCampaigns } from "@/lib/campaign-match"
 import { createCampaignClient } from "@/lib/data-client"
 import type { Campaign, CampaignMotion, CampaignType } from "@/lib/database.types"
-import { MOTION_OPTIONS, TYPE_OPTIONS, PRODUCT_OPTIONS } from "@/lib/database.types"
+import { MOTION_OPTIONS, TYPE_OPTIONS, PRODUCT_OPTIONS, NO_CAMPAIGN_ID } from "@/lib/database.types"
 
 interface Props {
   open: boolean
@@ -22,6 +24,7 @@ interface Props {
 
 export function CreateCampaignDialog({ open, onOpenChange, initialTitle, initialObjective, onCreated, stacked }: Props) {
   const { refreshCampaigns } = useRefreshData()
+  const { allCampaigns, teams, activeTeam } = useStore()
 
   const [title,     setTitle]     = useState(initialTitle ?? "")
   const [type,      setType]      = useState<CampaignType>("Always-on")
@@ -33,6 +36,16 @@ export function CreateCampaignDialog({ open, onOpenChange, initialTitle, initial
   const [error,     setError]     = useState("")
 
   if (!open) return null
+
+  // Across every team: the same campaign is often planned by two teams
+  const matches = similarCampaigns(title, allCampaigns.filter(c => c.id !== NO_CAMPAIGN_ID && c.status !== "Archived"))
+  const teamName = (id: string | null | undefined) => teams.find(t => t.id === id)?.name
+  const viewTeam = teamName(activeTeam)
+  const pickExisting = async (c: Campaign) => {
+    setSaving(true)
+    try { await onCreated?.(c); refreshCampaigns(); onOpenChange(false) }
+    finally { setSaving(false) }
+  }
 
   const handleCreate = async () => {
     if (!title.trim()) { setError("Title is required"); return }
@@ -75,6 +88,27 @@ export function CreateCampaignDialog({ open, onOpenChange, initialTitle, initial
                 placeholder="e.g. Q3 Brand Push"
                 className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container text-on-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
+              {matches.length > 0 && (
+                <div className="rounded-lg bg-surface-container-low px-3 py-2 flex flex-col gap-1.5">
+                  <p className="text-xs text-on-surface">This campaign may already exist:</p>
+                  {matches.map(c => (
+                    <div key={c.id} className="flex items-center gap-2 text-xs text-on-surface-variant">
+                      <span className="flex-1 min-w-0 truncate">
+                        <span className="text-on-surface">{c.title}</span>
+                        {teamName(c.team_id) ? ` · ${teamName(c.team_id)}` : " · shared"}
+                        {c.end_date ? ` · ends ${c.end_date}` : ""}
+                      </span>
+                      {onCreated && (
+                        <button type="button" disabled={saving} onClick={() => pickExisting(c)} className="underline underline-offset-2 hover:text-on-surface disabled:opacity-50">
+                          Use this one
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-on-surface-variant">Add your work to it instead of starting a second one, or carry on if it's really new.</p>
+                </div>
+              )}
+              {viewTeam && <p className="text-[11px] text-on-surface-variant">It'll belong to {viewTeam} and also show on the main calendar.</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
