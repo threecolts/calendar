@@ -1,7 +1,9 @@
 "use client"
 
+import Link from "next/link"
+
 import { useEffect, useState } from "react"
-import { X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
+import { Images, X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
 import {
@@ -211,6 +213,11 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
             )}
           </div>
           <div className="flex items-center gap-1">
+            {campaign.id !== NO_CAMPAIGN_ID && (
+              <Link href={`/campaigns/${campaign.id}`} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/85 transition-colors">
+                <Images className="h-3.5 w-3.5" /> Assets
+              </Link>
+            )}
             {isEditor && campaign.id !== NO_CAMPAIGN_ID && (
               <Button variant="ghost" size="sm" onClick={openDuplicate}>
                 <Copy className="h-3.5 w-3.5" /> Duplicate

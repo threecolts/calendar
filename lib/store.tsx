@@ -81,7 +81,7 @@ export function StoreProvider({
 }) {
   const [allCampaigns, setCampaigns] = useState<CampaignWithItems[]>(initialCampaigns)
   const [teams, setTeams] = useState<Team[]>(initialTeams)
-  // Your own team's view by default; a choice you make is remembered per browser
+  // Your own team's view every time you sign in; a switch lasts until the browser is closed
   const [activeTeam, setActiveTeamState] = useState<TeamView>(() =>
     initialTeams.some(t => t.id === initialCurrentUser?.team_id) ? initialCurrentUser!.team_id! : "all")
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
@@ -104,13 +104,13 @@ export function StoreProvider({
   useEffect(() => {
     if (!teamKey || !teams.length) return
     try {
-      const saved = localStorage.getItem(teamKey)
+      const saved = sessionStorage.getItem(teamKey)
       if (saved && (saved === "all" || teams.some(t => t.id === saved))) setActiveTeamState(saved)
     } catch {}
   }, [teamKey, teams])
   const setActiveTeam = useCallback((view: TeamView) => {
     setActiveTeamState(view)
-    try { if (teamKey) localStorage.setItem(teamKey, view) } catch {}
+    try { if (teamKey) sessionStorage.setItem(teamKey, view) } catch {}
   }, [teamKey])
 
   /** The team in view and every sub-team under it */
