@@ -287,7 +287,8 @@ export function ContentCalendar() {
         : { publish_date: date }
 
     // optimistic
-    setCampaigns(campaigns.map(c => {
+    // Functional update: `campaigns` may be a team view, the store holds everything
+    setCampaigns(prev => prev.map(c => {
       if (c.id !== item.campaign_id) return c
       return { ...c, items: (c.items || []).map(it =>
         it.id === item.id ? { ...it, ...patch } : it

@@ -1,8 +1,48 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
-import type { AppNotification, Campaign, ContentItem, ContentItemWithCampaign, IdeaWithCreator, ItemComment, Profile, CampaignWithItems } from "./database.types"
+import type { AppNotification, Campaign, ContentItem, ContentItemWithCampaign, IdeaWithCreator, ItemComment, Profile, CampaignWithItems, Team } from "./database.types"
 import { NO_CAMPAIGN_ID, NO_CAMPAIGN_LABEL } from "./database.types"
+
+// ---- Teams (scripts/012) ----
+
+/**
+ * The team new work is filed under: set by the store from the team view
+ * you're in, so anything created in the Brand view belongs to Brand.
+ * Null in the main view, and whenever teams aren't set up yet.
+ */
+let writeTeamId: string | null = null
+export function setWriteTeam(teamId: string | null) { writeTeamId = teamId }
+const withTeam = <T extends { team_id?: string | null }>(row: T): T =>
+  writeTeamId && row.team_id === undefined ? { ...row, team_id: writeTeamId } : row
+
+/** Teams, or [] if scripts/012 hasn't run yet (the app then works as before) */
+export async function getTeamsClient(): Promise<Team[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from("teams").select("*").order("sort_order").order("name")
+  if (error) return []
+  return (data ?? []) as Team[]
+}
+
+export async function createTeamClient(input: { name: string; parent_id: string | null }): Promise<Team> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from("teams").insert({ name: input.name.trim(), parent_id: input.parent_id }).select().single()
+  if (error) throw error
+  return data as Team
+}
+
+export async function updateTeamClient(id: string, updates: Partial<Pick<Team, "name" | "parent_id" | "sort_order">>): Promise<Team> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from("teams").update(updates).eq("id", id).select().single()
+  if (error) throw error
+  return data as Team
+}
+
+export async function deleteTeamClient(id: string): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.from("teams").delete().eq("id", id)
+  if (error) throw error
+}
 
 // ---- Avatar ----
 
@@ -49,7 +89,7 @@ export async function createCampaignClient(
   campaign: Partial<Omit<Campaign, "id" | "created_at" | "updated_at">> & { title: string }
 ): Promise<Campaign> {
   const supabase = createClient()
-  const { data, error } = await supabase.from("campaigns").insert(campaign).select().single()
+  const { data, error } = await supabase.from("campaigns").insert(withTeam(campaign)).select().single()
   if (error) throw error
   return data as Campaign
 }
@@ -75,7 +115,8 @@ export async function createContentItemClient(
   item: Partial<Omit<ContentItem, "id" | "created_at" | "updated_at">> & { campaign_id: string | null; title: string }
 ): Promise<ContentItem> {
   const supabase = createClient()
-  const { data, error } = await supabase.from("content_items").insert(item).select().single()
+  // An item in a campaign takes the campaign's team (database trigger), so only campaign-less items are tagged here
+  const { data, error } = await supabase.from("content_items").insert(item.campaign_id ? item : withTeam(item)).select().single()
   if (error) throw error
   return data as ContentItem
 }
@@ -86,7 +127,7 @@ export async function createContentItemsClient(
 ): Promise<ContentItem[]> {
   if (items.length === 0) return []
   const supabase = createClient()
-  const { data, error } = await supabase.from("content_items").insert(items).select()
+  const { data, error } = await supabase.from("content_items").insert(items.map(i => (i.campaign_id ? i : withTeam(i)))).select()
   if (error) throw error
   return (data ?? []) as ContentItem[]
 }
@@ -213,17 +254,21 @@ export async function getIdeasClient(): Promise<IdeaWithCreator[]> {
 }
 
 /** Quick-capture an idea — lightweight: just a title and optional notes */
-export async function createIdeaClient(input: { title: string; notes?: string | null; createdById?: string | null }): Promise<ContentItem> {
+export async function createIdeaClient(input: { title: string; notes?: string | null; createdById?: string | null; teamId?: string | null }): Promise<ContentItem> {
   const supabase = createClient()
+  const row: Record<string, unknown> = {
+    title: input.title,
+    notes: input.notes || null,
+    status: "Idea",
+    campaign_id: null,
+    created_by: input.createdById ?? null,
+  }
+  // A request sent to a team (teamId) or captured inside a team's view
+  const team = input.teamId !== undefined ? input.teamId : writeTeamId
+  if (team) row.team_id = team
   const { data, error } = await supabase
     .from("content_items")
-    .insert({
-      title: input.title,
-      notes: input.notes || null,
-      status: "Idea",
-      campaign_id: null,
-      created_by: input.createdById ?? null,
-    })
+    .insert(row)
     .select()
     .single()
   if (error) throw error

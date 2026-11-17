@@ -13,6 +13,15 @@ export type CampaignMotion = "SMB" | "Enterprise" | "Both" | "Retention"
 
 export type CampaignStatus = "Active" | "On Hold" | "Completed" | "Archived"
 
+/** A team or sub-team (scripts/012): Marketing → Brand */
+export interface Team {
+  id: string
+  name: string
+  parent_id: string | null
+  sort_order: number
+  created_at: string
+}
+
 export interface Campaign {
   id: string
   title: string
@@ -28,6 +37,8 @@ export interface Campaign {
   objective: string | null
   start_date: string | null
   end_date: string | null
+  /** Owning team (scripts/012); null = shared. Missing before that migration. */
+  team_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -105,6 +116,10 @@ export interface ContentItem {
   notes: string | null
   brief_url: string | null
   live_url: string | null
+  /** Link to the creative / final assets (scripts/012) */
+  asset_url?: string | null
+  /** Owning team (scripts/012); null = shared, or the campaign's team */
+  team_id?: string | null
   /** Who submitted the item — used to attribute Inbox ideas */
   created_by: string | null
   created_at: string
@@ -152,6 +167,8 @@ export interface Profile {
   timezone: string | null
   is_online: boolean
   app_role: AppRole
+  /** The person's team (scripts/012): their default view */
+  team_id?: string | null
   created_at: string
   updated_at: string
 }

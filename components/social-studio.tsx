@@ -530,6 +530,11 @@ export function SocialStudio() {
                 Open the Google Doc <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            {item.campaign_id && (
+              <a href={`/campaigns/${item.campaign_id}#social`} className={cx("text-xs inline-flex items-center gap-1 self-start", linkCls)}>
+                Rendered posts also show in {item.campaignTitle ?? "the campaign"}'s assets, under Socials <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
           </div>
         ) : (
           <p className="text-sm text-on-surface-variant">Pick an entry above to start.</p>

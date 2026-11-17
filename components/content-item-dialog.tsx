@@ -49,14 +49,31 @@ const EMPTY_FORM = {
   notes: "",
   brief_url: "",
   live_url: "",
+  asset_url: "",
 }
 
 const FieldLabel = Label
 const selectCls = () => fieldCls
 
 export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defaultCampaignId, onDuplicated }: Props) {
-  const { profiles, campaigns, currentUser } = useStore()
-  const isEditor = useIsEditor()
+  const { profiles, campaigns, allCampaigns, currentUser, teams, canEditTeam, activeTeam } = useStore()
+  const canEditAnything = useIsEditor()
+  // Work owned by a team can only be changed by that team (scripts/012)
+  const ownerTeam = item
+    ? (item.team_id ?? allCampaigns.find(c => c.id === item.campaign_id)?.team_id ?? null)
+    : null
+  const isEditor = canEditAnything && canEditTeam(ownerTeam)
+  const lockedByTeam = canEditAnything && !isEditor ? teams.find(t => t.id === ownerTeam)?.name ?? "another team" : null
+  // Team field: the item's team, or for a new item the team in view
+  const editableTeams = teams.filter(t => canEditTeam(t.id))
+  const [teamId, setTeamId] = useState<string>(() =>
+    item ? (item.team_id ?? "") : (activeTeam !== "all" && canEditTeam(activeTeam) ? activeTeam : ""))
+  /** Only send team and asset fields once scripts/012 has run (teams exist) */
+  const teamFields = () => {
+    if (!teams.length) return {}
+    const campaignTeam = allCampaigns.find(c => c.id === campaignId)?.team_id ?? null
+    return { team_id: teamId || campaignTeam, asset_url: form.asset_url?.trim() || null }
+  }
   const { refreshCampaigns } = useRefreshData()
 
   const isNew = item === null
@@ -75,10 +92,14 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           notes: item.notes ?? "",
           brief_url: item.brief_url ?? "",
           live_url: item.live_url ?? "",
+          asset_url: item.asset_url ?? "",
         }
       : { ...EMPTY_FORM, publish_date: defaultDate || null }
   )
-  const realCampaigns = campaigns.filter(c => c.id !== NO_CAMPAIGN_ID)
+  // Every campaign (a team can add work to shared campaigns), the ones in view first
+  const inView = new Set(campaigns.map(c => c.id))
+  const realCampaigns = allCampaigns.filter(c => c.id !== NO_CAMPAIGN_ID)
+    .sort((a, b) => Number(inView.has(b.id)) - Number(inView.has(a.id)))
   // Existing items must start on their OWN campaign — defaulting to the first
   // campaign here would silently re-parent the item on the next save.
   const [campaignId, setCampaignId]   = useState(
@@ -160,6 +181,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           live_url: form.live_url || null,
           contributors,
           ...(segments.length > 0 ? { audience_segments: segments } : {}),
+          ...teamFields(),
           sort_order: 0,
         })
         if (notifyTeam) {
@@ -182,6 +204,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
           live_url: form.live_url || null,
           contributors,
           ...(segmentsChanged ? { audience_segments: segments } : {}),
+          ...teamFields(),
         })
       }
       await refreshCampaigns()
@@ -219,6 +242,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
         live_url: published ? null : form.live_url || null,
         contributors,
         ...(segments.length > 0 ? { audience_segments: segments } : {}),
+        ...teamFields(),
         sort_order: item.sort_order + 1,
         created_by: currentUser?.id ?? null,
       })
@@ -346,10 +370,28 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
                   </select>
                 ) : (
                   <p className="text-sm text-on-surface px-3 py-2">
-                    {realCampaigns.find(c => c.id === campaignId)?.title ?? "No campaign"}
+                    {allCampaigns.find(c => c.id === campaignId)?.title ?? "No campaign"}
                   </p>
                 )}
               </div>
+
+              {lockedByTeam && (
+                <p className="text-xs text-on-surface-variant -mt-2">This belongs to {lockedByTeam}. Only {lockedByTeam} can change it; you can still comment.</p>
+              )}
+
+              {teams.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>Team</FieldLabel>
+                  {isEditor ? (
+                    <select value={teamId} onChange={e => setTeamId(e.target.value)} className={selectCls()}>
+                      <option value="">{campaignId && allCampaigns.find(c => c.id === campaignId)?.team_id ? "Same as the campaign" : "Shared (no team)"}</option>
+                      {editableTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  ) : (
+                    <p className="text-sm text-on-surface px-3 py-2">{teams.find(t => t.id === ownerTeam)?.name ?? "Shared"}</p>
+                  )}
+                </div>
+              )}
 
               {/* Channels — several when one post goes out on several accounts */}
               <div className="flex flex-col gap-1.5">
@@ -462,10 +504,10 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
               </div>
 
               {/* URLs */}
-              <div className="grid grid-cols-2 gap-3">
-                {(["brief_url", "live_url"] as const).map(field => (
+              <div className={cx("grid gap-3", teams.length ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2")}>
+                {(teams.length ? (["brief_url", "asset_url", "live_url"] as const) : (["brief_url", "live_url"] as const)).map(field => (
                   <div key={field} className="flex flex-col gap-1.5">
-                    <FieldLabel>{field === "brief_url" ? "Brief URL" : "Live URL"}</FieldLabel>
+                    <FieldLabel>{field === "brief_url" ? "Brief URL" : field === "asset_url" ? "Creative / assets" : "Live URL"}</FieldLabel>
                     {isEditor ? (
                       <input type="url" value={form[field] ?? ""}
                         onChange={e => setForm(prev => ({ ...prev, [field]: e.target.value }))}

@@ -1,7 +1,9 @@
 "use client"
 
+import Link from "next/link"
+
 import { useEffect, useState } from "react"
-import { X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
+import { Images, X, Plus, ExternalLink, Trash2, Sparkles, Copy } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
 import {
@@ -38,9 +40,13 @@ function shiftDate(date: string, days: number): string {
 }
 
 export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props) {
-  const { profiles, setCampaigns, campaigns, currentUser } = useStore()
+  const { profiles, setCampaigns, campaigns, currentUser, teams, canEditTeam } = useStore()
   const { refreshCampaigns } = useRefreshData()
-  const isEditor = useIsEditor()
+  // A team's campaign can only be changed by that team (scripts/012)
+  const canEditAnything = useIsEditor()
+  const isEditor = canEditAnything && canEditTeam(campaign.team_id)
+  const ownerName = teams.find(t => t.id === campaign.team_id)?.name ?? null
+  const [teamId, setTeamId] = useState(campaign.team_id ?? "")
 
   const [title,     setTitle]     = useState(campaign.title)
   const [type,      setType]      = useState<CampaignType>(campaign.type)
@@ -102,7 +108,11 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
   const handleSave = async () => {
     setSaving(true)
     try {
-      await updateCampaignClient(campaign.id, { title, type, motion, product, objective, end_date: endDate || null })
+      await updateCampaignClient(campaign.id, {
+        title, type, motion, product, objective, end_date: endDate || null,
+        // Moving a campaign to a team takes its items along (database trigger)
+        ...(teams.length ? { team_id: teamId || null } : {}),
+      })
       refreshCampaigns()
     } finally {
       setSaving(false)
@@ -196,14 +206,24 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
           <div className="flex items-center gap-3 min-w-0">
             <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: campaignColor(campaign.id) }} aria-hidden="true" />
             <h2 className="text-[22px] text-on-surface truncate">{title || "Campaign"}</h2>
+            {ownerName && (
+              <span className="flex-shrink-0 rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant" title={isEditor ? undefined : `Only ${ownerName} can change this campaign`}>
+                {ownerName}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
+            {campaign.id !== NO_CAMPAIGN_ID && (
+              <Link href={`/campaigns/${campaign.id}`} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/85 transition-colors">
+                <Images className="h-3.5 w-3.5" /> Assets
+              </Link>
+            )}
             {isEditor && campaign.id !== NO_CAMPAIGN_ID && (
               <Button variant="ghost" size="sm" onClick={openDuplicate}>
                 <Copy className="h-3.5 w-3.5" /> Duplicate
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={() => setConfirmDel(true)} aria-label="Delete campaign" className="hover:text-error hover:bg-error-container">
+            <Button variant="ghost" size="icon" onClick={() => setConfirmDel(true)} disabled={!isEditor} aria-label="Delete campaign" className="hover:text-error hover:bg-error-container">
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
@@ -254,6 +274,15 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={fieldCls} />
               </Field>
             </div>
+
+            {teams.length > 0 && (
+              <Field label="Team" hint="A team's campaign shows in that team's view and on the main calendar. Only that team can change it.">
+                <select value={teamId} onChange={e => setTeamId(e.target.value)} className={fieldCls}>
+                  <option value="">Shared (no team)</option>
+                  {teams.filter(t => canEditTeam(t.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </Field>
+            )}
 
             <Field label="Objective">
               <textarea value={objective} onChange={e => setObjective(e.target.value)} rows={3} className={textareaCls} />
