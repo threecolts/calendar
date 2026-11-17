@@ -19,7 +19,7 @@ const FILES = [
 
 const APP_NOTE = `# Running inside the Threecolts content calendar
 
-You're being called by the content calendar app (Lab → Social), not in a chat. The app runs the file steps in CLAUDE.md for you: it reads the brief, renders with post.html, packages the zip and handles photos. So:
+You're being called by the content calendar app (the Social tab), not in a chat. The app runs the file steps in CLAUDE.md for you: it reads the brief, renders with post.html, packages the zip and handles photos. So:
 - Ignore instructions about python scripts, uploading zips, folders and "ask Angela to download". Never ask questions: state assumptions as flags instead.
 - Return exactly the JSON the request asks for. Angela reviews everything in the app before anything is used.
 - Where TO-CONFIRM.md leaves something open, don't decide it: keep to what the brief says and flag the rest.

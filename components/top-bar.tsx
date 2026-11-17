@@ -11,11 +11,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cx } from "@/components/kit"
 import { OPEN_GUIDE_EVENT } from "@/components/onboarding-tour"
 
-const NAV = [
-  { label: "Inbox",     href: "/inbox" },
-  { label: "Requests",  href: "/requests" },
-  { label: "Calendar",  href: "/" },
+/** Top tabs. Inbox (ideas from anyone) only shows in the Everything view; teams work from Requests. */
+const NAV: { label: string; href: string; everythingOnly?: boolean }[] = [
   { label: "Campaigns", href: "/campaigns" },
+  { label: "Calendar",  href: "/" },
+  { label: "Social",    href: "/social" },
+  { label: "Requests",  href: "/requests" },
+  { label: "Inbox",     href: "/inbox", everythingOnly: true },
   { label: "Library",   href: "/library" },
   { label: "Team",      href: "/team" },
 ]
@@ -72,7 +74,7 @@ function TeamSwitcher() {
 export function TopBar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { currentUser, teams } = useStore()
+  const { currentUser, teams, activeTeam } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -107,7 +109,7 @@ export function TopBar() {
           className="col-span-2 row-start-2 md:col-span-1 md:row-start-1 md:col-start-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="inline-flex items-center gap-0.5 p-1 rounded-full border border-outline-variant">
-            {NAV.map(item => (
+            {NAV.filter(item => !item.everythingOnly || activeTeam === "all" || !teams.length).map(item => (
               <Link
                 key={item.href}
                 href={item.href}

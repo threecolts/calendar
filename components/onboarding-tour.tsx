@@ -187,7 +187,7 @@ const MARGIN = 16
 /** The app-wide guide. Steps aside on pages that have their own (the Lab). */
 export function OnboardingTour() {
   const pathname = usePathname()
-  return <GuidedTour steps={MAIN_STEPS} storageKey={seenKey} active={!pathname.startsWith("/lab")} />
+  return <GuidedTour steps={MAIN_STEPS} storageKey={seenKey} active={!pathname.startsWith("/lab") && !pathname.startsWith("/social")} />
 }
 
 /**

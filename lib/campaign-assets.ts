@@ -10,7 +10,7 @@ export const SECTIONS: { id: AssetSection; title: string; blurb: string; accept:
   { id: "moodboard", title: "Mood board", blurb: "The campaign's look and feel. Images, or a Figma, Milanote or Pinterest link.", accept: "image/*,application/pdf" },
   { id: "video", title: "Videos", blurb: "Paste a Google Drive link (best for big files: it plays right here), or a YouTube, Vimeo or Loom link, or upload a short video.", accept: "video/*" },
   { id: "design", title: "Design assets", blurb: "Agreed designs: key visuals, paid ads, statics, banners, thumbnails.", accept: "image/*,video/*,application/pdf" },
-  { id: "social", title: "Socials", blurb: "Social posts for this campaign. Posts made in Lab → Social posts appear here on their own.", accept: "image/*,video/*" },
+  { id: "social", title: "Socials", blurb: "Social posts for this campaign. Posts made in Social appear here on their own.", accept: "image/*,video/*" },
 ]
 
 export interface CampaignAsset {
@@ -122,7 +122,7 @@ export function embedUrl(raw: string): string | null {
 export const isImage = (a: CampaignAsset) => a.kind === "file" && !!a.mime_type?.startsWith("image/")
 export const isVideo = (a: CampaignAsset) => a.kind === "file" && !!a.mime_type?.startsWith("video/")
 
-// ---- Lab → Social posts made for this campaign's items ----
+// ---- Social posts made for this campaign's items ----
 
 export interface CampaignSocialPost {
   itemId: string

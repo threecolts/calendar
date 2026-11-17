@@ -158,13 +158,13 @@ function LabPosts({ posts }: { posts: CampaignSocialPost[] }) {
   if (!posts.length) return null
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[13px] font-medium text-on-surface flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> From Lab → Social posts</p>
+      <p className="text-[13px] font-medium text-on-surface flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> From Social</p>
       {posts.map(p => (
         <div key={p.itemId} className="rounded-xl border border-border bg-card p-3 flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="text-sm font-medium text-on-surface">{p.itemTitle}</span>
             <span className="text-xs text-on-surface-variant">{niceDate(p.publishDate)} · {p.approved ? `Option ${p.approved} approved` : "Not approved yet: all options"}</span>
-            <Link href={`/lab?tab=social&item=${p.itemId}`} className={cx("text-xs ml-auto inline-flex items-center gap-1", linkCls)}>Open in Lab <ExternalLink className="h-3 w-3" /></Link>
+            <Link href={`/social?item=${p.itemId}`} className={cx("text-xs ml-auto inline-flex items-center gap-1", linkCls)}>Open in Social <ExternalLink className="h-3 w-3" /></Link>
           </div>
           {p.angle && <p className="text-xs text-on-surface-variant">{p.angle}</p>}
           <div className="flex gap-2 overflow-x-auto pb-1">

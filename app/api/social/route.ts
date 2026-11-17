@@ -13,7 +13,7 @@ import { unsplashKey, UnsplashError } from "@/lib/social/unsplash"
 export const maxDuration = 300
 
 /**
- * Lab → Social: one calendar entry + its Google Doc → three static post
+ * Social tab: one calendar entry + its Google Doc → three static post
  * options, captions, renders and a zip (social/BUILD-SPEC.md).
  *
  * GET  ?item=<id>            the entry's social post, with signed image URLs

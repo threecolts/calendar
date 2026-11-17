@@ -39,9 +39,9 @@ After each week, add any lasting feedback to `system/do-and-dont.md` (Claude wri
 
 - **v1 (Claude Code tool):** Unsplash API search and download (`code/later/unsplash.py` is written, untested). Jev (TypeSafe) to score search terms and filter stock-looking results by their metadata before Claude looks at the shortlist. Needs `api.unsplash.com`, `images.unsplash.com`, `plus.unsplash.com` and `api.typesafe.ai` allowed.
 
-## In the content calendar app (Lab → Social)
+## In the content calendar app (the Social tab)
 
-The calendar app runs this system itself, so Angela doesn't need claude.ai or the zip. It lives in **Lab → Social posts**, and nothing there changes the calendar for anyone else.
+The calendar app runs this system itself, so Angela doesn't need claude.ai or the zip. It lives in **Social** (top tab; formerly Lab → Social posts), and nothing there changes the calendar for anyone else.
 
 **How Angela uses it:** pick a calendar entry → paste the brief or upload the Doc as a .docx → choose platforms and post type → *Write three options*. The app then runs the rest with no manual steps: Claude writes the options and captions, photos are found on Unsplash and picked, and every size is rendered. She approves one option, edits captions if needed, and downloads the zip (same layout as `code/package.py`). Per photo she can *Find another* or *Upload my own*.
 

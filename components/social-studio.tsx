@@ -454,8 +454,7 @@ export function SocialStudio() {
 
   function pick(id: string) {
     setItemId(id)
-    const sp = new URLSearchParams(params.toString()); sp.set("tab", "social"); sp.set("item", id)
-    router.replace(`/lab?${sp.toString()}`, { scroll: false })
+    router.replace(`/social?item=${encodeURIComponent(id)}`, { scroll: false })
   }
 
   useEffect(() => {

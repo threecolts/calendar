@@ -1,5 +1,5 @@
 /**
- * Unsplash for Lab → Social: port of social/code/later/unsplash.py.
+ * Unsplash for the Social tab: port of social/code/later/unsplash.py.
  *
  * Guidelines we follow (https://unsplash.com/documentation#guidelines--crediting):
  * - Hotlinking: the app shows and renders photos from Unsplash's own image URLs

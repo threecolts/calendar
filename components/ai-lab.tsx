@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Sparkles, Zap, PenLine, MessageSquare, Check, AlertTriangle, Copy as CopyIcon, FlaskConical, Compass } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
@@ -17,7 +17,6 @@ import { toPlainText } from "@/lib/mentions"
 import { GuidedTour, OPEN_GUIDE_EVENT, type Step } from "@/components/onboarding-tour"
 import { ChannelIcon } from "@/components/channel-icon"
 import { Button, ErrorText, Field, SegmentedControl, cx, fieldCls, linkCls, textareaCls } from "@/components/kit"
-import { SocialStudio } from "@/components/social-studio"
 
 // ---- Types mirrored from /api/lab ----
 interface Decision { id: string; answer: string; confidence: number; alternatives: { option: string; probability: number }[] }
@@ -590,15 +589,19 @@ function PlanDemo() {
 
 // ---- Page ----
 
-type Tab = "triage" | "comment" | "plan" | "social"
+type Tab = "triage" | "comment" | "plan"
 
 const labSeenKey = (userId: string) => `content-calendar:lab-guide-seen:v1:${userId}`
-const socialSeenKey = (userId: string) => `content-calendar:social-guide-seen:v1:${userId}`
 
 export function AiLab() {
   const params = useSearchParams()
   const initialTab = params.get("tab")
-  const [tab, setTab] = useState<Tab>(initialTab === "comment" || initialTab === "plan" || initialTab === "social" ? initialTab : "triage")
+  // Social posts moved to its own page: forward old /lab?tab=social links
+  const router = useRouter()
+  useEffect(() => {
+    if (initialTab === "social") router.replace(`/social${params.get("item") ? `?item=${params.get("item")}` : ""}`)
+  }, [initialTab, params, router])
+  const [tab, setTab] = useState<Tab>(initialTab === "comment" || initialTab === "plan" ? initialTab : "triage")
 
   const steps = useMemo<Step[]>(() => [
     {
@@ -614,13 +617,12 @@ export function AiLab() {
     {
       route: "/lab",
       target: "lab-tabs",
-      title: "Four tabs",
+      title: "Three demos",
       body: "Each tab shows one way Claude and Jev help.",
       bullets: [
         "Sort an idea: Jev sorts a new idea as you type.",
         "Comment to action: a teammate's comment becomes a one-click action.",
         "Check a plan: Claude drafts a plan and Jev checks every item.",
-        "Social posts: a calendar entry and its brief become ready-to-post graphics. It walks you through itself whenever you open it.",
       ],
     },
     {
@@ -679,75 +681,6 @@ export function AiLab() {
     },
   ], [])
 
-  // Its own guide: opens the first time anyone clicks the Social posts tab
-  const socialSteps = useMemo<Step[]>(() => {
-    const onEnter = () => setTab("social")
-    return [
-      {
-        route: "/lab",
-        onEnter,
-        title: "Social posts",
-        body: "Turn a calendar entry into ready-to-post graphics and captions, in the Threecolts look. A post takes about three minutes, most of it waiting.",
-        bullets: [
-          "Claude writes three different design options, with captions for each platform.",
-          "Real photos come from Unsplash: Jev filters out stock-looking ones, Claude picks. No AI images.",
-          "You approve one option and download a zip. Nothing here changes the calendar.",
-        ],
-      },
-      {
-        route: "/lab",
-        target: "social-entry",
-        onEnter,
-        title: "1. Pick the calendar entry",
-        body: "Search for the post you planned in the calendar. Its date and channel come with it.",
-      },
-      {
-        route: "/lab",
-        target: "social-brief",
-        onEnter,
-        title: "2. Give it the brief",
-        body: "Upload your Google Doc as a Word file, or paste its text.",
-        bullets: [
-          "In Google Docs: File → Download → Microsoft Word (.docx), then Upload .docx here.",
-          "The whole campaign Doc is fine. Claude uses the part for this entry and tells you which part it used.",
-          "Copy you've already written in the Doc (headline, sub-line, offer terms) is kept, not rewritten.",
-        ],
-      },
-      {
-        route: "/lab",
-        target: "social-setup",
-        onEnter,
-        title: "3. Platforms and post type",
-        body: "Pick where it's going and whether it's a single image, a carousel or a story. Sizes follow: portrait and square for feed posts, a story for the strongest option, landscape when X or LinkedIn is picked.",
-        bullets: ["Direction (optional) is for anything the Doc doesn't say, like which audience block to use or a mood."],
-      },
-      {
-        route: "/lab",
-        target: "social-generate",
-        onEnter,
-        title: "4. Write three options",
-        body: "One click runs everything: Claude writes the options, photos are found on Unsplash, and every size is rendered. Leave the tab open while it works.",
-      },
-      {
-        route: "/lab",
-        onEnter,
-        title: "5. Review, approve, download",
-        body: "When it's done, each option shows its images and why it exists.",
-        bullets: [
-          "Read Check before posting first: any claim, number or word that isn't in your brief is listed there.",
-          "Don't like a photo? Find another, or Upload my own. Don't like the copy? New copy rewrites one option.",
-          "Approve the one you want, edit the captions (character counts are shown), then Download zip: every size, captions.md and photo credits.",
-        ],
-      },
-      {
-        route: "/lab",
-        target: "lab-guide",
-        onEnter,
-        title: "That's it",
-        body: "This guide opens each time you come to Social posts. Close it whenever you like, and replay it from this button.",
-      },
-    ]
-  }, [])
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8 max-w-5xl mx-auto flex flex-col gap-6">
@@ -757,7 +690,7 @@ export function AiLab() {
             <FlaskConical className="h-6 w-6" /> Lab
           </h1>
           <Button variant="secondary" size="sm" onClick={() => window.dispatchEvent(new Event(OPEN_GUIDE_EVENT))} data-tour="lab-guide">
-            <Compass className="h-3.5 w-3.5" /> {tab === "social" ? "How Social posts works" : "How the Lab works"}
+            <Compass className="h-3.5 w-3.5" /> How the Lab works
           </Button>
         </div>
         <p className="text-sm text-on-surface-variant max-w-2xl">
@@ -779,7 +712,6 @@ export function AiLab() {
             { value: "triage", label: "Sort an idea" },
             { value: "comment", label: "Comment to action" },
             { value: "plan", label: "Check a plan" },
-            { value: "social", label: "Social posts" },
           ]}
         />
       </div>
@@ -789,23 +721,19 @@ export function AiLab() {
           {tab === "triage" && "Ideas sorted as you type"}
           {tab === "comment" && "A teammate's comment becomes a one-click action"}
           {tab === "plan" && "Claude drafts the plan, every item gets checked"}
-          {tab === "social" && "A calendar entry and its Doc become ready-to-post graphics"}
         </h2>
         <p className="text-sm text-on-surface-variant">
           {tab === "triage" && "Seven decisions at once: campaign, channel, format, product, audience, priority and a duplicate check."}
           {tab === "comment" && "Pick an idea and ask Jev about one of its comments. If it asks for a split, Claude reads the idea and its doc and drafts the campaigns; each is matched against your live campaigns before anything is created."}
           {tab === "plan" && "Claude turns a brain-dump into campaigns and dated items. Each item is checked for channel fit and duplicates, and each campaign matched to a live one."}
-          {tab === "social" && "Pick an entry and give it the brief. Claude writes three design options and captions, picks real Unsplash photos (Jev filters out stock first) and renders every size. You approve one, tweak captions and download the zip. Nothing here changes the calendar."}
         </p>
       </div>
 
       {tab === "triage" && <TriageDemo />}
       {tab === "comment" && <CommentDemo initialIdeaId={params.get("idea") ?? undefined} initialCommentId={params.get("comment") ?? undefined} />}
       {tab === "plan" && <PlanDemo />}
-      {tab === "social" && <SocialStudio />}
 
-      <GuidedTour steps={steps} storageKey={labSeenKey} active={tab !== "social"} closeWhenInactive />
-      <GuidedTour steps={socialSteps} storageKey={socialSeenKey} active={tab === "social"} closeWhenInactive autoOpen="every-time" />
+      <GuidedTour steps={steps} storageKey={labSeenKey} active />
     </div>
   )
 }
