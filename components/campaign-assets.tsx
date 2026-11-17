@@ -21,10 +21,14 @@ const host = (url: string) => { try { return new URL(url).hostname.replace(/^www
 const mb = (n: number | null) => (n ? `${(n / 1024 / 1024).toFixed(n > 10 * 1024 * 1024 ? 0 : 1)} MB` : "")
 
 /** One asset as a tile: image, playable video, embedded link, or a file/link card */
-function AssetTile({ asset, big, editable, onOpen, onChanged }: {
+function AssetTile({ asset, big, editable, onOpen, onChanged, onAspect, onMove }: {
   asset: CampaignAsset; big?: boolean; editable: boolean
   onOpen: (a: CampaignAsset) => void
   onChanged: () => void
+  /** Reports the asset's width ÷ height once known (for the justified preview) */
+  onAspect?: (id: string, aspect: number) => void
+  /** Manage mode: move one place earlier (-1) or later (+1) */
+  onMove?: (dir: -1 | 1) => void
 }) {
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(asset.title ?? "")
@@ -40,11 +44,13 @@ function AssetTile({ asset, big, editable, onOpen, onChanged }: {
   if (isImage(asset) && asset.src) {
     media = (
       <button type="button" onClick={() => onOpen(asset)} className="block w-full">
-        <img src={asset.src} alt={asset.title ?? ""} className={cx("w-full h-auto block bg-surface-container-low", !big && "max-h-80 object-cover")} loading="lazy" />
+        <img src={asset.src} alt={asset.title ?? ""} className={cx("w-full h-auto block bg-surface-container-low", !big && "max-h-80 object-cover")} loading="lazy"
+          onLoad={e => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) onAspect?.(asset.id, i.naturalWidth / i.naturalHeight) }} />
       </button>
     )
   } else if (isVideo(asset) && asset.src) {
-    media = <video src={asset.src} controls preload="metadata" className="w-full block bg-black aspect-video" />
+    media = <video src={asset.src} controls preload="metadata" className="w-full block bg-black aspect-video"
+      onLoadedMetadata={e => { const v = e.currentTarget; if (v.videoWidth && v.videoHeight) onAspect?.(asset.id, v.videoWidth / v.videoHeight) }} />
   } else if (embed) {
     media = <iframe src={embed} title={asset.title ?? "Embedded media"} className="w-full aspect-video block border-0 bg-surface-container-low" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen loading="lazy" />
   } else {
@@ -82,6 +88,12 @@ function AssetTile({ asset, big, editable, onOpen, onChanged }: {
             )}
             {editable && (
               <>
+                {onMove && (
+                  <>
+                    <button type="button" onClick={() => onMove(-1)} aria-label="Move earlier" className="p-1 text-on-surface-variant hover:text-on-surface"><ChevronLeft className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => onMove(1)} aria-label="Move later" className="p-1 text-on-surface-variant hover:text-on-surface"><ChevronRight className="h-3.5 w-3.5" /></button>
+                  </>
+                )}
                 <button type="button" onClick={() => setRenaming(true)} aria-label="Rename" className="p-1 text-on-surface-variant hover:text-on-surface"><Pencil className="h-3.5 w-3.5" /></button>
                 <button type="button" disabled={busy} aria-label="Delete" className="p-1 text-on-surface-variant hover:text-error" onClick={async () => {
                   if (!confirm(`Delete ${asset.title || "this asset"}?`)) return
@@ -150,6 +162,48 @@ function AddControls({ campaignId, section, accept, onAdded }: { campaignId: str
         </form>
       )}
       <ErrorText>{error}</ErrorText>
+    </div>
+  )
+}
+
+/**
+ * Justified rows for the preview: anything wide (a strip, a 16:9 key visual
+ * or wider) gets its own full-width row; squares and portraits share a row
+ * at the same height, sized by their shape, like a justified gallery.
+ */
+const WIDE = 1.7
+const ROW_TARGET = 2.6
+function JustifiedRows({ items, aspectOf, render }: {
+  items: CampaignAsset[]
+  aspectOf: (a: CampaignAsset) => number
+  render: (a: CampaignAsset) => React.ReactNode
+}) {
+  const rows: CampaignAsset[][] = []
+  let row: CampaignAsset[] = []
+  let sum = 0
+  for (const a of items) {
+    const r = aspectOf(a)
+    if (r >= WIDE) {
+      if (row.length) { rows.push(row); row = []; sum = 0 }
+      rows.push([a])
+      continue
+    }
+    row.push(a); sum += r
+    if (sum >= ROW_TARGET || row.length === 3) { rows.push(row); row = []; sum = 0 }
+  }
+  if (row.length) rows.push(row)
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.map((r, i) => (
+        <div key={i} className="flex gap-3 items-start [&_figure]:mb-0">
+          {r.map(a => (
+            // Same height across the row: each item's width follows its shape
+            <div key={a.id} style={{ flex: `${aspectOf(a)} 1 0%` }} className="min-w-0">{render(a)}</div>
+          ))}
+          {/* A lone square or portrait shouldn't stretch to full width */}
+          {r.length === 1 && aspectOf(r[0]) < WIDE && <div style={{ flex: `${Math.max(0, ROW_TARGET - aspectOf(r[0]))} 1 0%` }} />}
+        </div>
+      ))}
     </div>
   )
 }
@@ -272,6 +326,20 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
   // Preview is how the team looks at a campaign; Manage is for adding and removing
   const [mode, setMode] = useState<"preview" | "manage">("preview")
   const [presenting, setPresenting] = useState<number | null>(null)
+  // Measured shapes (width ÷ height) for the justified preview
+  const [aspects, setAspects] = useState<Record<string, number>>({})
+  const noteAspect = useCallback((id: string, r: number) => setAspects(prev => (Math.abs((prev[id] ?? 0) - r) < 0.01 ? prev : { ...prev, [id]: r })), [])
+  const aspectOf = (a: CampaignAsset) => aspects[a.id] ?? (a.kind === "link" ? (embedUrl(a.url!) ? 16 / 9 : 3) : isVideo(a) ? 16 / 9 : 1.4)
+  // Drag to reorder (Manage)
+  const [dragId, setDragId] = useState<string | null>(null)
+  async function reorder(section: AssetSection, ids: string[]) {
+    setAssets(prev => {
+      const others = prev.filter(a => a.section !== section)
+      const mine = ids.map(id => prev.find(a => a.id === id)!).filter(Boolean).map((a, i) => ({ ...a, sort_order: i }))
+      return [...mine, ...others]
+    })
+    await Promise.all(ids.map((id, i) => updateAsset(id, { sort_order: i }))).catch(() => load())
+  }
 
   const itemKey = (campaign?.items ?? []).map(i => i.id).join(",")
   const load = useCallback(async () => {
@@ -357,6 +425,32 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
         const hero = preview && isBoard ? list[0] : null
         const rest = hero ? list.slice(1) : list
         const openAsset = (a: CampaignAsset) => { const n = slides.findIndex(s => s.key === a.id); if (n >= 0) setPresenting(n); else setOpen(a) }
+        const ids = list.map(a => a.id)
+        const move = (id: string, dir: -1 | 1) => {
+          const i = ids.indexOf(id), j = i + dir
+          if (j < 0 || j >= ids.length) return
+          const next = [...ids]; [next[i], next[j]] = [next[j], next[i]]
+          reorder(sec.id, next)
+        }
+        const manageTile = (a: CampaignAsset) => (
+          <div key={a.id} draggable={editable}
+            onDragStart={() => setDragId(a.id)}
+            onDragOver={e => { if (dragId && dragId !== a.id && ids.includes(dragId)) e.preventDefault() }}
+            onDrop={e => {
+              e.preventDefault()
+              if (!dragId || dragId === a.id || !ids.includes(dragId)) return
+              const next = ids.filter(x => x !== dragId)
+              next.splice(next.indexOf(a.id), 0, dragId)
+              setDragId(null)
+              reorder(sec.id, next)
+            }}
+            onDragEnd={() => setDragId(null)}
+            className={cx("break-inside-avoid", editable && "cursor-grab active:cursor-grabbing", dragId === a.id && "opacity-50")}>
+            <AssetTile asset={a} big={isBoard} editable={editable} onOpen={openAsset} onChanged={load} onAspect={noteAspect} onMove={editable ? dir => move(a.id, dir) : undefined} />
+          </div>
+        )
+        const previewTile = (a: CampaignAsset) => <AssetTile asset={a} big editable={false} onOpen={openAsset} onChanged={load} onAspect={noteAspect} />
+        const justified = preview && (sec.id === "design" || isBoard)
         return (
           <section key={sec.id} id={sec.id} className="flex flex-col gap-3 scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -367,11 +461,13 @@ export function CampaignAssets({ campaignId }: { campaignId: string }) {
             </div>
             {editable && !preview && <AddControls campaignId={campaign.id} section={sec.id} accept={sec.accept} onAdded={load} />}
             {sec.id === "social" && <LabPosts posts={social} preview={preview} />}
-            {hero && <AssetTile asset={hero} big editable={false} onOpen={openAsset} onChanged={load} />}
+            {hero && previewTile(hero)}
             {rest.length > 0 ? (
-              <div className={layout}>
-                {rest.map(a => <AssetTile key={a.id} asset={a} big={isBoard || preview} editable={editable && !preview} onOpen={openAsset} onChanged={load} />)}
-              </div>
+              justified
+                ? <JustifiedRows items={rest} aspectOf={aspectOf} render={previewTile} />
+                : preview
+                  ? <div className={layout}>{rest.map(a => <div key={a.id}>{previewTile(a)}</div>)}</div>
+                  : <div className={layout}>{rest.map(manageTile)}</div>
             ) : hero ? null : !preview && !(sec.id === "social" && social.length) && (
               <div className="rounded-xl border-2 border-dashed border-outline-variant px-4 py-8 text-center text-sm text-on-surface-variant flex flex-col items-center gap-2">
                 <ImagePlus className="h-5 w-5" aria-hidden="true" />
