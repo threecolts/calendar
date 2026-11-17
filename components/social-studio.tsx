@@ -211,6 +211,7 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost, onChanged }: {
             : <p className="text-xs text-on-surface-variant">Uploaded · no credit in the file name</p>)}
           {!photo && log && (log.error || log.note) && <p className="text-xs text-on-surface-variant">{log.error || log.note}</p>}
           {!photo && busy !== "find" && !log && post.unsplash && <p className="text-xs text-on-surface-variant">Not picked yet.</p>}
+          {!photo && !post.unsplash && <p className="text-xs text-on-surface-variant">Unsplash isn't connected yet, so photos aren't picked for you. Upload one for now: search Unsplash with the terms below and don't rename the file.</p>}
           {editable && (
             <div className="flex flex-wrap items-center gap-1.5 mt-1">
               {post.unsplash && (
@@ -272,8 +273,8 @@ function PhotoSlot({ post, slot, slide, itemId, editable, onPost, onChanged }: {
   )
 }
 
-function OptionCard({ post, option, itemId, editable, busy, onAction, onPost, onZoom }: {
-  post: SocialPost; option: PlanOption; itemId: string; editable: boolean; busy: string | null
+function OptionCard({ post, option, itemId, editable, busy, error, onAction, onPost, onZoom }: {
+  post: SocialPost; option: PlanOption; itemId: string; editable: boolean; busy: string | null; error: string
   onAction: (action: string, extra?: Record<string, unknown>) => void
   onPost: (p: SocialPost) => void
   onZoom: (r: Render) => void
@@ -361,6 +362,7 @@ function OptionCard({ post, option, itemId, editable, busy, onAction, onPost, on
           </Button>
         </div>
       )}
+      <ErrorText>{error}</ErrorText>
       {showRegen && editable && (
         <div className="flex flex-col gap-2">
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="What should change? (optional)" className={textareaCls} />
@@ -438,6 +440,9 @@ export function SocialStudio() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [zoom, setZoom] = useState<Render | null>(null)
+  /** Which action failed ("render-A", "render", "plan" …), so its error shows next to its button */
+  const [errorAt, setErrorAt] = useState<string | null>(null)
+  const optionError = (o: string) => (errorAt === `render-${o}` || errorAt === `regenerate-${o}` ? error : "")
 
   const [platforms, setPlatforms] = useState<Platform[]>(["Instagram"])
   const [postType, setPostType] = useState<PostType>("single")
@@ -480,12 +485,12 @@ export function SocialStudio() {
   async function run(action: string, extraBody: Record<string, unknown> = {}) {
     if (!itemId) return null
     const key = extraBody.option ? `${action}-${extraBody.option}` : action
-    setBusy(key); setError("")
+    setBusy(key); setError(""); setErrorAt(null)
     try {
       const { post: next } = await social({ action, itemId, ...extraBody })
       setPost(next)
       return next
-    } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong"); return null }
+    } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong"); setErrorAt(key); return null }
     finally { setBusy(null) }
   }
 
@@ -595,7 +600,7 @@ export function SocialStudio() {
               <p className="text-sm text-on-surface-variant" data-tour="social-generate">Only editors can generate posts.</p>
             )}
         </fieldset>
-        <ErrorText>{error}</ErrorText>
+        <ErrorText>{errorAt?.includes("-") ? "" : error}</ErrorText>
       </div>
 
       {loading && <p className="text-sm text-on-surface-variant flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>}
@@ -627,7 +632,7 @@ export function SocialStudio() {
 
           <div className="flex flex-col gap-4">
             {plan.options.map(o => (
-              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} onAction={run} onPost={setPost} onZoom={setZoom} />
+              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} error={optionError(o.option)} onAction={run} onPost={setPost} onZoom={setZoom} />
             ))}
           </div>
 
@@ -647,6 +652,7 @@ export function SocialStudio() {
                 <Download className="h-4 w-4" /> Download zip
               </a>
             )}
+            {errorAt === "render" && <ErrorText>{error}</ErrorText>}
             {tokens && tokens.i > 0 && (
               <span className="text-xs text-on-surface-variant">Claude so far: {tokens.i.toLocaleString()} tokens in, {tokens.o.toLocaleString()} out</span>
             )}

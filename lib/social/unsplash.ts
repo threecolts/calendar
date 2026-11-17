@@ -15,8 +15,16 @@ const UTM = "utm_source=threecolts_content_calendar&utm_medium=referral"
 /** Shortest acceptable long side, in px (BUILD-SPEC: skip photos under 2400) */
 export const MIN_LONG_SIDE = 2400
 
+/**
+ * The Access Key, under whatever name it was saved: UNSPLASH_ACCESS_KEY is the
+ * documented one, but any variable with UNSPLASH in its name works, except
+ * the Secret Key, which is never sent.
+ */
 export function unsplashKey(): string | null {
-  return process.env.UNSPLASH_ACCESS_KEY || process.env.UNSPLASH_API_KEY || process.env.UNSPLASH_KEY || null
+  const named = process.env.UNSPLASH_ACCESS_KEY || process.env.UNSPLASH_API_KEY || process.env.UNSPLASH_KEY
+  if (named?.trim()) return named.trim()
+  const found = Object.entries(process.env).find(([k, v]) => /unsplash/i.test(k) && !/secret/i.test(k) && !!v?.trim())
+  return found?.[1]?.trim() || null
 }
 
 export interface Candidate {

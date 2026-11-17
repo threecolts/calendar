@@ -10,7 +10,14 @@ const nextConfig = {
       './social/system/**',
       './social/CLAUDE.md',
       './social/TO-CONFIRM.md',
+      // Files these packages read at runtime that tracing can't see. Both the npm
+      // layout and pnpm's (.pnpm/<pkg>@<version>/…, which Vercel uses) are listed.
       './node_modules/@sparticuz/chromium/bin/**',
+      './node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/**',
+      './node_modules/playwright-core/browsers.json',
+      './node_modules/playwright-core/package.json',
+      './node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json',
+      './node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/package.json',
     ],
   },
   typescript: {
