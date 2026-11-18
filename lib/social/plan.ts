@@ -1,6 +1,6 @@
 import { generateText, Output } from "ai"
-import { writerModel } from "@/lib/ai/models"
-import { socialSystemPrompt } from "@/lib/social/system"
+import { socialModel } from "@/lib/ai/models"
+import { readSocialFile, socialSystemPrompt } from "@/lib/social/system"
 import { runChecks, type CheckIssue } from "@/lib/social/checks"
 import { planSchema, type Platform, type PostType, type SocialPlan } from "@/lib/social/plan-schema"
 import type { Format, OptionSpec, PostSpec } from "@/lib/social/render"
@@ -32,7 +32,7 @@ export interface ModelRun {
 }
 
 /** Everything a claim may be checked against: the post brief and the campaign */
-const allBriefs = (b: BriefInput) => `${b.docText}\n${b.campaignContext ?? ""}`
+const allBriefs = (b: BriefInput) => `${b.docText}\n${b.campaignContext ?? ""}\n${readSocialFile("system/products.md")}`
 
 /** Calendar fields mapped onto templates/weekly-brief.md; the Doc fills the rest */
 function briefMessage(b: BriefInput) {
@@ -59,6 +59,8 @@ function briefMessage(b: BriefInput) {
     "## Output",
     `- Three options, A–C. ${b.postType === "carousel" ? `Each option is a carousel of ${b.cards ?? 5} cards.` : b.postType === "story" ? "Each option is one story frame." : "Each option is one frame."}`,
     "- Photo slides (fullbleed, framed) need a `photo` brief with search terms; type and close slides have `photo: null`.",
+    "- Carousels are designed, not a photo then plain text: for 4 or more cards, use photos on at least two cards (the cover and at least one inside), never more than two type cards in a row, and vary the layouts (fullbleed, framed, type, close).",
+    "- If the campaign lists visuals ([asset:<id>], e.g. a key visual or webinar mark), you may place one in a framed or fullbleed card with `campaign_asset` (and `photo: null`). The cover or the close works best; at most one per option.",
     "- These are posts, not ads: no buttons on the image (there is no CTA field), no price stickers, no discount as a giant stat. The brief's CTA and offer terms go in the captions; an offer can appear on the image only as a plain sentence.",
     `- Captions for: ${b.postType === "story" ? "none (stories get no caption)" : b.platforms.join(", ")}. Don't write character counts; the app counts.`,
     "",
@@ -82,7 +84,7 @@ export async function generatePlan(b: BriefInput): Promise<{ plan: SocialPlan; i
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await generateText({
-      model: writerModel,
+      model: socialModel,
       system: socialSystemPrompt(),
       messages,
       output: Output.object({ schema: planSchema }),
@@ -111,7 +113,7 @@ export async function regenerateOption(b: BriefInput, plan: SocialPlan, option: 
   const optionSchema = planSchema.shape.options.element
   const current = plan.options.find(o => o.option === option)
   const result = await generateText({
-    model: writerModel,
+    model: socialModel,
     system: socialSystemPrompt(),
     messages: [
       { role: "user", content: briefMessage(b) },
@@ -179,6 +181,7 @@ export function planToPostSpec(
     product: plan.product,
     options: plan.options.map(o => {
       const frames = o.slides.map((s, i) => {
+        // A campaign visual or a photo, both delivered by slot
         const p = s.layout === "fullbleed" || s.layout === "framed" ? photoFor(`${o.option}-${i + 1}`) : null
         return {
           layout: s.layout,

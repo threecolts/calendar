@@ -11,6 +11,7 @@ const FILES = [
   "system/look.md",
   "system/brand.md",
   "system/brand-strategy.md",
+  "system/products.md",
   "system/photography.md",
   "system/captions.md",
   "system/formats.md",

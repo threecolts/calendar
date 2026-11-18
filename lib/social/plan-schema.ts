@@ -6,7 +6,13 @@ export type Platform = (typeof PLATFORMS)[number]
 export const POST_TYPES = ["single", "carousel", "story"] as const
 export type PostType = (typeof POST_TYPES)[number]
 
-export const PRODUCTS = ["threecolts", "seller-365", "ai-operator"] as const
+/** Every product in system/products.md (the Threecolts Brand System's product marks) */
+export const PRODUCTS = [
+  "threecolts", "margin-pro", "unicon", "seller-365", "ai-operator", "retail-365",
+  "tactical-arbitrage", "inventorylab", "inventorylab-accounting", "smartrepricer",
+  "scoutiq", "scoutx", "scoutify", "feedbackwhiz-emails", "feedbackwhiz-alerts", "feedbackwhiz-profits",
+  "seller-365-reimbursements", "onsite-support",
+] as const
 
 const searchTerm = z.object({
   term: z.string().describe("3–6 words: a person, an action, a place and a light (system/photography.md)"),
@@ -28,7 +34,8 @@ const slide = z.object({
   dark: z.boolean().describe("Graphite canvas for framed/type/close. AI Operator type cards are dark"),
   anchor_bottom: z.boolean().describe("Type cards only: text at the bottom"),
   stat: z.object({ value: z.string(), label: z.string() }).nullable().describe("Only for data from the brief, never for a discount or price"),
-  photo: photoBrief.nullable().describe("Required for fullbleed and framed; null for type and close"),
+  photo: photoBrief.nullable().describe("Required for fullbleed and framed (unless campaign_asset is set); null for type and close"),
+  campaign_asset: z.string().nullable().describe("The id of one of the campaign's own visuals (listed as [asset:<id>]) to place in this card instead of a photo, on a framed or fullbleed card. Null otherwise"),
   alt_text: z.string().describe("Plain description of the image and the words on it"),
 })
 

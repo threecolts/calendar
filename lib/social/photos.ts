@@ -1,6 +1,6 @@
 import { generateText, Output } from "ai"
 import { z } from "zod"
-import { writerModel } from "@/lib/ai/models"
+import { socialModel } from "@/lib/ai/models"
 import { decide, type Question } from "@/lib/ai/decide"
 import { socialSystemPrompt } from "@/lib/social/system"
 import { judgeUrl, renderUrl, searchPhotos, trackDownload, type Candidate } from "@/lib/social/unsplash"
@@ -153,7 +153,7 @@ async function claudePick(slide: PlanSlide, layout: string, list: Candidate[], f
     content.push({ type: "image", image: img, mediaType: "image/jpeg" })
   })
   const result = await generateText({
-    model: writerModel,
+    model: socialModel,
     system: socialSystemPrompt(),
     messages: [{ role: "user", content }],
     output: Output.object({ schema: pickSchema }),

@@ -19,6 +19,8 @@ interface PlanSlide {
   layout: "fullbleed" | "framed" | "type" | "close"
   headline: string; sub: string | null; eyebrow: string | null; prompt: string | null
   photo: { moment: string; search_terms: { term: string }[]; look_for: string; skip: string } | null
+  /** One of the campaign's own visuals placed in this card */
+  campaign_asset?: string | null
   alt_text: string
 }
 interface PlanOption { option: "A" | "B" | "C"; why: string; strongest: boolean; slides: PlanSlide[] }
@@ -308,7 +310,15 @@ function OptionCard({ post, option, itemId, editable, busy, error, onAction, onP
   const issues = post.checks.filter(c => c.where.startsWith(`Option ${option.option}`))
   const [note, setNote] = useState("")
   const [showRegen, setShowRegen] = useState(false)
-  const photoSlides = option.slides.map((s, i) => ({ s, slot: `${option.option}-${i + 1}` })).filter(({ s }) => s.layout === "fullbleed" || s.layout === "framed")
+  // Per-card votes for "More like these" (carousels): card index → 1 like, -1 dislike
+  const [votes, setVotes] = useState<Record<number, 1 | -1>>({})
+  const vote = (i: number, v: 1 | -1) => setVotes(prev => { const n = { ...prev }; if (n[i] === v) delete n[i]; else n[i] = v; return n })
+  const voted = Object.keys(votes).length > 0
+  const flippable = option.slides.filter(sl => sl.layout !== "fullbleed")
+  const mostlyDark = flippable.length > 0 && flippable.filter(sl => (sl as PlanSlide & { dark?: boolean }).dark).length >= flippable.length / 2
+  const tweak = (kind: string, extra: Record<string, unknown> = {}) => { onAction("tweak", { option: option.option, kind, ...extra }); if (kind === "feedback") setVotes({}) }
+  const isCarousel = option.slides.length > 1
+  const photoSlides = option.slides.map((s, i) => ({ s, slot: `${option.option}-${i + 1}` })).filter(({ s }) => (s.layout === "fullbleed" || s.layout === "framed") && !s.campaign_asset)
   const missing = photoSlides.filter(({ slot }) => !post.photos[slot]).length
 
   return (
@@ -329,7 +339,7 @@ function OptionCard({ post, option, itemId, editable, busy, error, onAction, onP
           <li key={i} className="text-sm text-on-surface flex gap-2">
             {option.slides.length > 1 && <span className="text-on-surface-variant tabular-nums w-5">{i + 1}.</span>}
             <span className="flex-1">
-              <span className="text-xs uppercase tracking-wide text-on-surface-variant mr-1.5">{s.layout}</span>
+              <span className="text-xs uppercase tracking-wide text-on-surface-variant mr-1.5">{s.layout}{s.campaign_asset ? " · campaign visual" : ""}</span>
               {s.eyebrow && <span className="text-xs text-on-surface-variant mr-1.5">[{s.eyebrow}]</span>}
               <span dangerouslySetInnerHTML={{ __html: s.headline.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!)).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") }} />
               {s.sub && <span className="block text-on-surface-variant">{s.sub}</span>}
@@ -359,14 +369,30 @@ function OptionCard({ post, option, itemId, editable, busy, error, onAction, onP
 
       {renders.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {renders.map(r => (
-            <button key={r.path} type="button" onClick={() => onZoom(r)} className="flex-shrink-0 flex flex-col gap-1 items-start">
-              {r.url
-                ? <img src={r.url} alt={r.name} className="h-40 w-auto rounded-lg border border-border bg-surface-container-low" />
-                : <span className="h-40 w-32 rounded-lg bg-surface-container-high" />}
-              <span className="text-[11px] text-on-surface-variant">{r.format}{/_(\d+of\d+)$/.test(r.name) ? ` ${r.name.match(/_(\d+)of/)![1]}` : ""}</span>
-            </button>
-          ))}
+          {renders.map(r => {
+            const n = r.name.match(/_(\d+)of\d+$/)?.[1]
+            const card = n ? Number(n) - 1 : null
+            // Votes on the first format only (one set of cards)
+            const votable = editable && isCarousel && card !== null && r.format === renders[0].format
+            return (
+              <div key={r.path} className="flex-shrink-0 flex flex-col gap-1 items-start">
+                <button type="button" onClick={() => onZoom(r)}>
+                  {r.url
+                    ? <img src={r.url} alt={r.name} className={cx("h-40 w-auto rounded-lg border bg-surface-container-low", card !== null && votes[card] === 1 ? "border-primary ring-2 ring-primary/40" : card !== null && votes[card] === -1 ? "border-border opacity-50" : "border-border")} />
+                    : <span className="h-40 w-32 rounded-lg bg-surface-container-high" />}
+                </button>
+                <span className="flex items-center gap-1 text-[11px] text-on-surface-variant">
+                  {r.format}{n ? ` ${n}` : ""}
+                  {votable && (
+                    <>
+                      <button type="button" aria-label={`Keep card ${n}`} aria-pressed={votes[card!] === 1} onClick={() => vote(card!, 1)} className={cx("px-1 rounded", votes[card!] === 1 && "bg-primary text-primary-foreground")}>👍</button>
+                      <button type="button" aria-label={`Change card ${n}`} aria-pressed={votes[card!] === -1} onClick={() => vote(card!, -1)} className={cx("px-1 rounded", votes[card!] === -1 && "bg-primary text-primary-foreground")}>👎</button>
+                    </>
+                  )}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -389,6 +415,25 @@ function OptionCard({ post, option, itemId, editable, busy, error, onAction, onP
           <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setShowRegen(v => !v)}>
             <RefreshCw className="h-3.5 w-3.5" /> New copy
           </Button>
+        </div>
+      )}
+      {editable && renders.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-on-surface-variant mr-1">Try:</span>
+          {flippable.length > 0 && <Pill onClick={busy ? undefined : () => tweak("dark")}>{mostlyDark ? "Light mode" : "Dark mode"}</Pill>}
+          <Pill onClick={busy ? undefined : () => tweak("more-photos")}>More photos</Pill>
+          <Pill onClick={busy ? undefined : () => tweak("shorter")}>Shorter copy</Pill>
+          <Pill onClick={busy ? undefined : () => tweak("use-visual")}>Use campaign visual</Pill>
+          {voted && (
+            <Button size="sm" disabled={!!busy} onClick={() => tweak("feedback", {
+              liked: Object.entries(votes).filter(([, v]) => v === 1).map(([k]) => Number(k)),
+              disliked: Object.entries(votes).filter(([, v]) => v === -1).map(([k]) => Number(k)),
+            })}>
+              {busy === `tweak-${option.option}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} More like these
+            </Button>
+          )}
+          {busy === `tweak-${option.option}` && <span className="text-xs text-on-surface-variant">Rewriting, then finding photos and rendering…</span>}
+          {isCarousel && !voted && <span className="text-xs text-on-surface-variant">Or 👍 the cards to keep and 👎 the ones to change.</span>}
         </div>
       )}
       <ErrorText>{error}</ErrorText>
@@ -485,7 +530,7 @@ export function SocialStudio() {
   const [zoom, setZoom] = useState<Render | null>(null)
   /** Which action failed ("render-A", "render", "plan" …), so its error shows next to its button */
   const [errorAt, setErrorAt] = useState<string | null>(null)
-  const optionError = (o: string) => (errorAt === `render-${o}` || errorAt === `regenerate-${o}` ? error : "")
+  const optionError = (o: string) => (errorAt === `render-${o}` || errorAt === `regenerate-${o}` || errorAt === `tweak-${o}` ? error : "")
 
   const [platforms, setPlatforms] = useState<Platform[]>(["Instagram"])
   const [postType, setPostType] = useState<PostType>("single")
@@ -536,6 +581,14 @@ export function SocialStudio() {
     finally { setBusy(null) }
   }
 
+  /** Option actions; a rewrite (new copy or a tweak) goes straight on to photos and a render */
+  async function act(action: string, extra: Record<string, unknown> = {}) {
+    const next = await run(action, extra)
+    if (!next || !(action === "regenerate" || action === "tweak")) return
+    if (extra.kind !== "dark" && next.unsplash) await run("photos")
+    await run("render", { option: extra.option })
+  }
+
   /**
    * Opening a post that isn't finished finishes it: any photo slot that was never
    * searched gets Unsplash photos, then anything unrendered renders. Once per post per visit.
@@ -545,7 +598,7 @@ export function SocialStudio() {
     if (!post?.plan || !isEditor || busy || !itemId || autoBuilt.current.has(itemId)) return
     autoBuilt.current.add(itemId)
     const slots = post.plan.options.flatMap(o => o.slides.map((sl, i) => ({ slot: `${o.option}-${i + 1}`, sl })))
-      .filter(x => x.sl.layout === "fullbleed" || x.sl.layout === "framed")
+      .filter(x => (x.sl.layout === "fullbleed" || x.sl.layout === "framed") && !x.sl.campaign_asset)
     const unsearched = slots.some(x => !post.photos[x.slot] && !post.plan?.photo_log?.[x.slot])
     const unrendered = post.renders.length === 0
     if (!(unsearched && post.unsplash) && !unrendered) return
@@ -561,7 +614,7 @@ export function SocialStudio() {
     if (itemId) autoBuilt.current.add(itemId)
     const planned = await run("plan", { platforms, postType, cards, extra, briefText: brief })
     if (!planned?.plan) return
-    const needsPhotos = planned.plan.options.some(o => o.slides.some(s => s.layout === "fullbleed" || s.layout === "framed"))
+    const needsPhotos = planned.plan.options.some(o => o.slides.some(s => (s.layout === "fullbleed" || s.layout === "framed") && !s.campaign_asset))
     let current = planned
     if (needsPhotos && planned.unsplash) {
       const withPhotos = await run("photos")
@@ -735,7 +788,7 @@ export function SocialStudio() {
 
           <div className="flex flex-col gap-4">
             {plan.options.map(o => (
-              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} error={optionError(o.option)} onAction={run} onPost={setPost} onZoom={setZoom} campaign={itemCampaign ? { id: itemCampaign.id, title: itemCampaign.title } : null} />
+              <OptionCard key={o.option} post={post} option={o} itemId={item.id} editable={isEditor} busy={busy} error={optionError(o.option)} onAction={act} onPost={setPost} onZoom={setZoom} campaign={itemCampaign ? { id: itemCampaign.id, title: itemCampaign.title } : null} />
             ))}
           </div>
 

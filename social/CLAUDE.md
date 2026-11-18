@@ -8,6 +8,7 @@ v0 has no image API. You write Unsplash search terms; Angela downloads the photo
 
 1. `system/look.md`: the look (OpenAI's Instagram is the base) and the three layouts.
 2. `system/brand.md`: colours, type, logos, product names, voice, banned words, claims.
+   `system/products.md`: every product, what it does and its proof points (from threecolts.com).
    `system/brand-strategy.md`: the personality (in your corner, calm in the storm, quietly expert, boldly playful) and how it looks.
 3. `system/photography.md`: how to write search terms and how to judge photos.
 4. `system/captions.md`: platform rules for captions.
@@ -42,7 +43,7 @@ The organisation's **Threecolts Brand System** (a Design System artifact, the or
 1. **Real photos only.** No AI images, no illustrations standing in for photos, no stock clichés (see `photography.md`).
 2. **No logo on posts by default.** The profile picture does the branding, as on OpenAI's Instagram. The product is named in the copy. Use `"logo": true` only when the brief asks (a launch announcement, a partner post).
 3. **Copy follows the brand voice** (`brand.md`): sentence case, headlines end with a full stop, no banned words, decisive, specific.
-4. **Claims:** never invent numbers, prices, plans or customer results. Use only what's in the brief, and flag anything you can't verify. AI Operator works only with Seller 365 and never makes FNSKU labels.
+4. **Claims:** never invent numbers, prices, plans or customer results. Use only what's in the brief, the campaign, or the public product facts in `system/products.md` (check prices with the brief), and flag anything else. AI Operator works only with Seller 365 and never makes FNSKU labels.
 5. **Three real options per post.** Different layout, photo or idea. Say in one line why each exists.
 6. **Every format is composed, not cropped blindly.** Check each format's frame: faces never under text, nothing important in a story's top 250 px or bottom 400 px.
 7. **Look before you show.** Never hand over a render you haven't viewed.

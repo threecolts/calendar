@@ -104,8 +104,10 @@ async function campaignContextFor(supabase: Supabase, item: NonNullable<Awaited<
     .sort((a, b) => (a.publish_date ?? "9999").localeCompare(b.publish_date ?? "9999"))
     .slice(0, 30)
 
-  const { data: assets } = await supabase.from("campaign_assets").select("section, title, note").eq("campaign_id", c.id).in("section", ["moodboard", "design"])
+  const { data: assets } = await supabase.from("campaign_assets").select("id, section, title, note, kind, mime_type").eq("campaign_id", c.id).in("section", ["moodboard", "design"])
   const visuals = (assets ?? []).filter(a => a.title || a.note)
+  // Image files Claude may place in a card (campaign_asset)
+  const placeable = (assets ?? []).filter(a => a.kind === "file" && String(a.mime_type ?? "").startsWith("image/"))
 
   const text = [
     `- **Campaign:** ${c.title}${c.type ? ` (${c.type}` : ""}${c.motion ? `, ${c.motion}` : ""}${c.type ? ")" : ""}`,
@@ -114,6 +116,7 @@ async function campaignContextFor(supabase: Supabase, item: NonNullable<Awaited<
     c.start_date || c.end_date ? `- **Dates:** ${c.start_date ?? "?"} to ${c.end_date ?? "?"}` : "",
     near.length ? `- **Other entries in the campaign around this date:**\n${near.map(i => `  - ${i.publish_date ?? "undated"}: ${i.title} (${i.channel}, ${i.format}, ${i.status})`).join("\n")}` : "",
     visuals.length ? `- **Mood board and key visuals (Assets):**\n${visuals.map(a => `  - ${a.section === "moodboard" ? "Mood board" : "Design"}: ${[a.title, a.note].filter(Boolean).join(": ")}`).join("\n")}` : "",
+    placeable.length ? `- **Campaign visuals you can place in a card (campaign_asset):**\n${placeable.map(a => `  - [asset:${a.id}] ${a.title || "Untitled"} (${a.section === "moodboard" ? "mood board" : "design"})`).join("\n")}` : "",
     brief ? `\n### Campaign brief\n<campaign_brief>\n${brief.slice(0, 30000)}\n</campaign_brief>` : "",
   ].filter(Boolean).join("\n")
 
@@ -177,9 +180,18 @@ async function fetchDataUrl(url: string) {
 }
 
 /** Every slide that needs a photo, with what the picker needs to know */
+/** Card slots that show one of the campaign's own visuals: slot → asset id */
+function assetSlots(plan: SocialPlan) {
+  const out: Record<string, string> = {}
+  plan.options.forEach(o => o.slides.forEach((s, i) => {
+    if (s.campaign_asset && /^[0-9a-f-]{36}$/.test(s.campaign_asset)) out[`${o.option}-${i + 1}`] = s.campaign_asset
+  }))
+  return out
+}
+
 function photoSlots(plan: SocialPlan) {
   return plan.options.flatMap(o => o.slides.map((slide, i) => ({ slot: `${o.option}-${i + 1}`, slide, layout: slide.layout, strongest: o.strongest })))
-    .filter(s => s.layout === "fullbleed" || s.layout === "framed")
+    .filter(s => (s.layout === "fullbleed" || s.layout === "framed") && !s.slide.campaign_asset)
 }
 
 async function toDataUrl(supabase: Supabase, path: string) {
@@ -294,6 +306,40 @@ export async function POST(req: Request) {
     if (!row?.plan) return Response.json({ error: "Write the plan first" }, { status: 400 })
     const meta = row.plan.meta ?? { platforms: ["Instagram"] as Platform[], postType: "single" as PostType }
 
+    // ── Tweak one option. Dark mode flips the canvas here; the rest rewrite
+    //    the option through Claude with a specific note (below) ──
+    if (body.action === "tweak") {
+      const option = body.option as "A" | "B" | "C"
+      const opt = row.plan.options.find(o => o.option === option)
+      if (!opt) return Response.json({ error: "Which option?" }, { status: 400 })
+      const kind = String(body.kind ?? "")
+      if (kind === "dark") {
+        const plan = structuredClone(row.plan)
+        const target = plan.options.find(o => o.option === option)!
+        const flippable = target.slides.filter(sl => sl.layout !== "fullbleed")
+        const toDark = flippable.filter(sl => sl.dark).length < flippable.length / 2
+        for (const sl of flippable) sl.dark = toDark
+        return Response.json(await present(supabase, await saveRow(supabase, itemId, { plan })))
+      }
+      const card = (i: number) => `card ${i + 1} ("${(opt.slides[i]?.headline ?? "").replace(/\*\*/g, "")}")`
+      const liked = (Array.isArray(body.liked) ? body.liked : []).map(Number).filter((i: number) => opt.slides[i])
+      const disliked = (Array.isArray(body.disliked) ? body.disliked : []).map(Number).filter((i: number) => opt.slides[i])
+      const notes: Record<string, string> = {
+        "more-photos": "Use photos on more cards: make at least three cards photo cards (fullbleed or framed) with their own photo briefs, different moments of the same story. Keep the copy unless a card needs to change to fit a photo.",
+        "shorter": "Make the copy shorter and punchier: headlines of eight words or fewer, subs one short line or none. Keep the idea and the facts.",
+        "use-visual": "Place one of the campaign's own visuals (campaign_asset, e.g. the key visual) on the cover or a framed card. If the campaign has none listed, keep the option as it is and add a flag saying so.",
+        "feedback": [
+          liked.length ? `Keep these cards exactly as they are (same layout, copy and photo brief): ${liked.map(card).join(", ")}.` : "",
+          disliked.length ? `Rewrite these cards with a different idea or layout: ${disliked.map(card).join(", ")}.` : "",
+          "Keep the option's story and the number of cards.",
+        ].filter(Boolean).join(" "),
+      }
+      if (!notes[kind]) return Response.json({ error: "Unknown tweak" }, { status: 400 })
+      body.action = "regenerate"
+      body.note = notes[kind]
+      body.keep = kind === "feedback" ? liked : []
+    }
+
     // ── New copy for one option ──
     if (body.action === "regenerate") {
       const option = body.option as "A" | "B" | "C"
@@ -301,7 +347,9 @@ export async function POST(req: Request) {
       const context = await campaignContextFor(supabase, item)
       const { plan, issues, runs } = await regenerateOption({ ...briefFrom(item, row.brief_text ?? "", meta), campaignContext: context.text || undefined }, row.plan, option, String(body.note ?? "").slice(0, 1000))
       // That option's photos and renders no longer match its copy
-      const photos = Object.fromEntries(Object.entries(row.photos).filter(([k]) => !k.startsWith(`${option}-`)))
+      // (except cards the reviewer liked and asked to keep)
+      const keep = new Set((Array.isArray(body.keep) ? body.keep : []).map((i: number) => `${option}-${Number(i) + 1}`))
+      const photos = Object.fromEntries(Object.entries(row.photos).filter(([k]) => !k.startsWith(`${option}-`) || keep.has(k)))
       const renders = row.renders.filter(r => r.option !== option)
       const saved = await saveRow(supabase, itemId, {
         plan: { ...plan, meta }, checks: issues, photos, renders,
@@ -367,11 +415,23 @@ export async function POST(req: Request) {
         else if (one) delete photos[s.slot]
         if (error) errors.push(error)
       }
+      // No grey boxes: a card whose photo couldn't be found becomes a type card
+      const plan = structuredClone(fresh.plan!)
+      for (const { s, r, error } of results) {
+        if (r?.photo || error || one) continue
+        const [opt, n] = s.slot.split("-")
+        const slide = plan.options.find(o => o.option === opt)?.slides[Number(n) - 1]
+        if (!slide) continue
+        slide.dark = slide.layout === "fullbleed" ? true : slide.dark
+        slide.layout = "type"
+        slide.photo = null
+        log[s.slot] = { ...log[s.slot], note: `No photo passed, so this card became a type card. ${log[s.slot].note}`.trim() }
+      }
       // That option's renders are out of date now
       const changed = new Set(results.filter(x => x.r?.photo).map(x => x.s.slot.split("-")[0]))
       const saved = await saveRow(supabase, itemId, {
         photos,
-        plan: { ...fresh.plan!, photo_log: log },
+        plan: { ...plan, photo_log: log },
         runs,
         renders: fresh.renders,
         error: errors.length ? [...new Set(errors)].join(" ") : null,
@@ -414,8 +474,19 @@ export async function POST(req: Request) {
         if (only && !slot.startsWith(`${only}-`)) continue
         dataUrls[slot] = p.source === "unsplash" && p.url ? await fetchDataUrl(p.url) : await toDataUrl(supabase, p.path!)
       }
+      // The campaign's own visuals placed in cards (key visual, marks)
+      const wanted = Object.entries(assetSlots(row.plan)).filter(([slot]) => !only || slot.startsWith(`${only}-`))
+      if (wanted.length) {
+        const { data: rows } = await supabase.from("campaign_assets").select("id, path").in("id", [...new Set(wanted.map(([, id]) => id))])
+        for (const [slot, id] of wanted) {
+          const path = rows?.find(r => r.id === id)?.path
+          if (!path) continue
+          const { data: blob } = await supabase.storage.from("campaign-assets").download(path)
+          if (blob) dataUrls[slot] = `data:${blob.type || "image/png"};base64,${Buffer.from(await blob.arrayBuffer()).toString("base64")}`
+        }
+      }
       const spec = planToPostSpec(postId, row.plan, meta.postType, meta.platforms, slot =>
-        dataUrls[slot] ? { url: dataUrls[slot], focus: row.photos[slot]?.focus } : null)
+        dataUrls[slot] ? { url: dataUrls[slot], focus: row.photos[slot]?.focus ?? "50% 50%" } : null)
       // Loaded on demand: headless Chromium is only needed here, and a problem
       // starting it shouldn't take down the rest of the tab
       let renderPosts: typeof import("@/lib/social/render").renderPosts

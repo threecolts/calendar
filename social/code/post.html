@@ -111,10 +111,14 @@ const FORMATS = {
   story:     {W:1080,H:1920,px:88,pt:250,pb:400},
   landscape: {W:1200,H:628, px:64,pt:56, pb:56}
 };
+// Official files from the Threecolts Brand System (Product marks). Where only a
+// dark lockup exists, the icon tile is used on dark (brand system rule). Products
+// without files here fall back to the Threecolts lockup.
 const LOGOS = {
   "threecolts":  {light:"threecolts-colour-light.svg", dark:"threecolts-colour-dark.svg"},
   "ai-operator": {light:"ai-operator-logo-light.svg",  dark:"ai-operator-logo-dark.svg"},
-  "seller-365":  {light:"seller-365-logo-light.svg",   dark:"seller-365-logo-dark.svg"}
+  "seller-365":  {light:"seller-365-logo-light.svg",   dark:"seller-365-logo-dark.svg"},
+  "unicon":      {light:"unicon-icon.svg",             dark:"unicon-logo-dark.svg"}
 };
 const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const smart = s => String(s ?? "").replace(/(\w)'(\w)/g,"$1\u2019$2").replace(/(^|[\s(])'/g,"$1\u2018").replace(/'/g,"\u2019").replace(/(^|[\s(])"/g,"$1\u201C").replace(/"/g,"\u201D");

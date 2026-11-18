@@ -14,6 +14,15 @@ export const deciderModel = anthropic
   ? anthropic(process.env.ANTHROPIC_FAST_MODEL || "claude-haiku-5-5")
   : process.env.AI_GATEWAY_MODEL || "inclusionai/ling-3.0-flash-fin"
 
+/**
+ * Social posts (the Social tab: planning, rewrites, photo picks) run on
+ * Claude Opus 5.5 for design judgement; SOCIAL_MODEL overrides it. The rest
+ * of the app stays on the writer model.
+ */
+export const socialModel = anthropic
+  ? anthropic(process.env.SOCIAL_MODEL || "claude-opus-5-5")
+  : writerModel
+
 export const deciderLabel = anthropic ? "Claude Haiku 5.5" : "Free AI Gateway model"
 
 /**

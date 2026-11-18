@@ -9,7 +9,7 @@
 
 Defaults if the brief doesn't say: single posts in `portrait` + `square`, with `story` for the strongest option; carousels in `portrait`; add `landscape` when X or LinkedIn is named.
 
-**Carousels:** 3–8 cards. Cover = photo (full-bleed) with the promise. Interior = one point per card, usually `type` cards. Last card = `close`: a closing line, no button (the CTA lives in the caption). Keep the same canvas (light or dark) for all interior cards. Number cards in the copy only if the content really is a sequence.
+**Carousels:** 3–8 cards, designed as a set, not a photo followed by plain text. From 4 cards, at least two cards carry a photo (the cover and one inside), never more than two type cards in a row, and the layouts vary. A campaign's own visual (key visual, webinar mark) can sit in a framed or full-bleed card (`campaign_asset`), usually the cover or the close. Cover = photo (full-bleed) with the promise. Interior = one point per card, usually `type` cards. Last card = `close`: a closing line, no button (the CTA lives in the caption). Keep the same canvas (light or dark) for all interior cards. Number cards in the copy only if the content really is a sequence.
 
 ## The spec file (`work/week.json`)
 
