@@ -101,7 +101,7 @@ type ViewMode = "month" | "week" | "list"
 // ─── component ───────────────────────────────────────────────────────────────
 
 export function ContentCalendar() {
-  const { campaigns, profiles, setCampaigns } = useStore()
+  const { campaigns, profiles, setCampaigns, canEditTeam } = useStore()
   const { refreshCampaigns } = useRefreshData()
   const isEditor = useIsEditor()
 
@@ -274,6 +274,9 @@ export function ContentCalendar() {
 
   // ── drag & drop ──────────────────────────────────────────────────────────
 
+  /** Viewers, and people outside the item's team, can look but not move */
+  const canDrag = (item: ContentItemWithCampaign) => isEditor && canEditTeam(item.team_id ?? item.campaign?.team_id)
+
   const handleDragStart = (item: ContentItemWithCampaign, e: React.DragEvent) => {
     dragItem.current = item
     e.dataTransfer.effectAllowed = "move"
@@ -394,7 +397,7 @@ export function ContentCalendar() {
               key={item.id}
               item={item}
               onClick={() => openItem(item)}
-              onDragStart={e => handleDragStart(item, e)}
+              onDragStart={canDrag(item) ? e => handleDragStart(item, e) : undefined}
               muted={outside}
             />
           ))}
@@ -580,7 +583,7 @@ export function ContentCalendar() {
               key={item.id}
               item={item}
               onClick={() => openItem(item)}
-              onDragStart={e => handleDragStart(item, e)}
+              onDragStart={canDrag(item) ? e => handleDragStart(item, e) : undefined}
             />
           ))}
         </div>

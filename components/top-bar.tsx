@@ -3,7 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { User, Settings, LogOut, Compass, FlaskConical, Check, ChevronDown } from "lucide-react"
+import { User, Settings, LogOut, Compass, FlaskConical, Check, ChevronDown, MessageSquarePlus } from "lucide-react"
+import { useIsEditor } from "@/lib/store"
 import { createClient } from "@/lib/supabase/client"
 import { useStore } from "@/lib/store"
 import { NotificationBell } from "@/components/notification-bell"
@@ -12,6 +13,9 @@ import { cx } from "@/components/kit"
 import { OPEN_GUIDE_EVENT } from "@/components/onboarding-tour"
 
 /** Top tabs. Inbox (ideas from anyone) only shows in the Everything view; teams work from Requests. */
+/** Where people outside the content team send requests: #3c-marketing-requests in Slack */
+const REQUESTS_SLACK = "https://threecolts.slack.com/archives/C062FGNEFSQ"
+
 const NAV: { label: string; href: string; everythingOnly?: boolean }[] = [
   { label: "Campaigns", href: "/campaigns" },
   { label: "Calendar",  href: "/" },
@@ -75,6 +79,7 @@ export function TopBar() {
   const pathname = usePathname()
   const router = useRouter()
   const { currentUser, teams, activeTeam } = useStore()
+  const isEditor = useIsEditor()
   const [menuOpen, setMenuOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -126,7 +131,19 @@ export function TopBar() {
         </nav>
 
         <div className="justify-self-end row-start-1 col-start-2 md:col-start-3 flex items-center gap-1">
-          <Link
+          {/* View-only people (the rest of the company) ask the team in Slack */}
+          {currentUser && !isEditor && (
+            <a
+              href={REQUESTS_SLACK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-9 px-3.5 inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add a request</span>
+            </a>
+          )}
+          {isEditor && <Link
             href="/lab"
             aria-current={pathname.startsWith("/lab") ? "page" : undefined}
             className={cx(
@@ -138,7 +155,7 @@ export function TopBar() {
           >
             <FlaskConical className="h-4 w-4" />
             <span className="hidden sm:inline">Lab</span>
-          </Link>
+          </Link>}
           <button
             data-tour="guide"
             onClick={() => window.dispatchEvent(new Event(OPEN_GUIDE_EVENT))}

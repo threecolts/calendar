@@ -7,7 +7,8 @@ import { ChannelIcon } from "@/components/channel-icon"
 interface Props {
   item: ContentItemWithCampaign
   onClick: () => void
-  onDragStart: (e: React.DragEvent) => void
+  /** Omit to make the chip read-only (viewers, other teams' work) */
+  onDragStart?: (e: React.DragEvent) => void
   compact?: boolean
   /** Dims items that belong to the previous / next month shown around the current one. */
   muted?: boolean
@@ -29,13 +30,13 @@ export function ContentItemChip({ item, onClick, onDragStart, compact, muted }: 
       data-tour="cal-card"
       role="button"
       tabIndex={0}
-      draggable
+      draggable={!!onDragStart}
       onClick={onClick}
       onDragStart={onDragStart}
       onKeyDown={e => { if (e.key === "Enter") onClick() }}
-      title={`${channels.join(", ")} · ${item.title}\nCampaign: ${item.campaignTitle} · ${item.status}${isProvisional ? " (Provisional)" : ""}\nDrag to reschedule`}
+      title={`${channels.join(", ")} · ${item.title}\nCampaign: ${item.campaignTitle} · ${item.status}${isProvisional ? " (Provisional)" : ""}${onDragStart ? "\nDrag to reschedule" : ""}`}
       style={{ background: channelBackground(item.channel) }}
-      className={`rounded-lg px-2.5 py-2 text-white cursor-grab active:cursor-grabbing select-none transition-[filter,opacity] hover:brightness-110 ${
+      className={`rounded-lg px-2.5 py-2 text-white ${onDragStart ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} select-none transition-[filter,opacity] hover:brightness-110 ${
         item.status === "Published" || muted ? "opacity-50" : ""
       }`}
     >

@@ -76,6 +76,8 @@ export async function POST(req: Request) {
         id: newUserId,
         full_name: fullName.trim(),
         role: role?.trim() || "Team Member",
+        // Invited by an editor = a teammate. Self sign-ups start as viewers (scripts/016)
+        app_role: "editor",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },
