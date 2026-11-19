@@ -148,6 +148,17 @@ export async function deleteContentItemClient(id: string): Promise<void> {
 }
 
 /**
+ * Delete many items in one statement. Returns the ids actually deleted: rows
+ * another team owns are skipped by the database, not an error.
+ */
+export async function deleteContentItemsClient(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await createClient().from("content_items").delete().in("id", ids).select("id")
+  if (error) throw error
+  return (data ?? []).map(r => r.id as string)
+}
+
+/**
  * Re-parent many items to one campaign in a single statement, so a bulk move
  * can't half-apply. Pass null to detach the items from any campaign.
  */

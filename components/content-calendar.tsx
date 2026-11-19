@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { useStore, useIsEditor } from "@/lib/store"
 import { useRefreshData } from "@/components/data-provider"
-import { updateContentItemClient, moveContentItemsClient } from "@/lib/data-client"
+import { updateContentItemClient, moveContentItemsClient, deleteContentItemsClient } from "@/lib/data-client"
 import type { ContentChannel, ContentItemWithCampaign, ItemStatus } from "@/lib/database.types"
 import {
   CHANNEL_ICONS,
@@ -335,7 +335,29 @@ export function ContentCalendar() {
       return next
     })
 
-  const clearSelection = () => { setSelectedIds(new Set()); setMoveTarget(""); setMoveError("") }
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const clearSelection = () => { setSelectedIds(new Set()); setMoveTarget(""); setMoveError(""); setConfirmBulkDelete(false) }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirmBulkDelete) { setConfirmBulkDelete(true); return }
+    setMoving(true); setMoveError("")
+    try {
+      const deleted = new Set(await deleteContentItemsClient([...selectedIds]))
+      const kept = [...selectedIds].filter(id => !deleted.has(id))
+      await refreshCampaigns()
+      clearSelection()
+      // Anything another team owns stays, selected, with a note
+      if (kept.length) {
+        setSelectedIds(new Set(kept))
+        setMoveError(`${kept.length} item${kept.length === 1 ? " belongs" : "s belong"} to another team and ${kept.length === 1 ? "wasn't" : "weren't"} deleted.`)
+      }
+    } catch (e) {
+      setMoveError(e instanceof Error ? e.message : "Failed to delete items")
+    } finally {
+      setMoving(false)
+    }
+  }
 
   const handleBulkMove = async () => {
     if (selectedIds.size === 0) return
@@ -737,11 +759,18 @@ export function ContentCalendar() {
             {moving ? "Moving…" : "Move"}
           </button>
           <button
+            onClick={handleBulkDelete}
+            disabled={moving}
+            className={cx(buttonCls(confirmBulkDelete ? "primary" : "ghost", "sm"), confirmBulkDelete ? "!bg-error !text-white" : "text-error hover:bg-error-container")}
+          >
+            {confirmBulkDelete ? `Delete ${selectedIds.size}? Can't be undone` : "Delete"}
+          </button>
+          <button
             onClick={clearSelection}
             disabled={moving}
             className={buttonCls("ghost", "sm")}
           >
-            Clear
+            {confirmBulkDelete ? "Cancel" : "Clear"}
           </button>
           {moveError && <span className="text-[13px] text-error w-full px-1 pb-1">{moveError}</span>}
         </div>
