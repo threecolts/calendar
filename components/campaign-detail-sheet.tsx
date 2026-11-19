@@ -60,6 +60,7 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
   const [briefUrl,  setBriefUrl]  = useState(campaign.brief_url || "")
   const [briefNote, setBriefNote] = useState("")
   const [endDate,   setEndDate]   = useState(campaign.end_date || "")
+  const [leadId,    setLeadId]    = useState(campaign.lead_id || "")
   const [saving,    setSaving]    = useState(false)
   const [selectedItem, setSelectedItem] = useState<ContentItemWithCampaign | null>(null)
   /** A just-duplicated item to open as soon as it shows up in the refreshed campaign */
@@ -115,7 +116,7 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
     setSaving(true)
     try {
       await updateCampaignClient(campaign.id, {
-        title, type, motion, product, objective, end_date: endDate || null,
+        title, type, motion, product, objective, end_date: endDate || null, lead_id: leadId || null,
         // Moving a campaign to a team takes its items along (database trigger)
         ...(teams.length ? { team_id: teamId || null } : {}),
         ...(hasBriefColumn ? { brief: brief.trim() || null, brief_url: briefUrl.trim() || null } : {}),
@@ -281,6 +282,13 @@ export function CampaignDetailSheet({ campaign, onClose, onOpenCampaign }: Props
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={fieldCls} />
               </Field>
             </div>
+
+            <Field label="Campaign lead" hint="Shown on the campaign card. Items have their own owners.">
+              <select value={leadId} onChange={e => setLeadId(e.target.value)} className={fieldCls}>
+                <option value="">No lead</option>
+                {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+              </select>
+            </Field>
 
             {teams.length > 0 && (
               <Field label="Team" hint="A team's campaign shows in that team's view and on the main calendar. Only that team can change it.">

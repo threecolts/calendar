@@ -5,6 +5,7 @@ import { User, Mail, Briefcase, Globe, Camera, Check, Key, LogOut, Loader2 } fro
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { updateProfileClient, getCurrentUserProfileClient, uploadAvatarClient } from "@/lib/data-client"
+import { useStore } from "@/lib/store"
 
 const timezones = [
   "UTC",
@@ -31,6 +32,12 @@ const roles = [
 
 export default function ProfilePage() {
   const router = useRouter()
+  const { setCurrentUser, setProfiles, profiles } = useStore()
+  /** Show the change everywhere (top bar, calendar avatars) without a reload */
+  const publish = (p: import("@/lib/database.types").Profile) => {
+    setCurrentUser(p)
+    setProfiles(profiles.map(x => (x.id === p.id ? p : x)))
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [userId, setUserId] = useState<string | null>(null)
@@ -91,11 +98,11 @@ export default function ProfilePage() {
     setSaveError("")
     
     try {
-      await updateProfileClient(userId, {
-        full_name: fullName,
-        role,
+      publish(await updateProfileClient(userId, {
+        full_name: fullName.trim(),
+        role: role.trim(),
         timezone,
-      })
+      }))
       
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -121,7 +128,7 @@ export default function ProfilePage() {
     try {
       // Upload to Supabase Storage and persist the public URL on the profile
       const publicUrl = await uploadAvatarClient(userId, file)
-      await updateProfileClient(userId, { avatar_url: publicUrl })
+      publish(await updateProfileClient(userId, { avatar_url: publicUrl }))
       setAvatarUrl(publicUrl)
     } catch (error) {
       console.error("Error uploading avatar:", error)
@@ -242,7 +249,7 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3 mb-6">
           <div>
             <h2 className="text-[22px] text-on-surface">Personal information</h2>
-            <p className="text-sm text-on-surface-variant">Your name, role and timezone.</p>
+            <p className="text-sm text-on-surface-variant">Your name, title and timezone.</p>
           </div>
         </div>
 
@@ -275,20 +282,20 @@ export default function ProfilePage() {
 
           {/* Role */}
           <div className="flex flex-col gap-2">
-            <label className="text-[13px] text-on-surface-variant">Role
+            <label className="text-[13px] text-on-surface-variant">Title
             </label>
-            <select
+            {/* Free text: type any title, or pick a common one */}
+            <input
+              type="text"
+              list="profile-title-options"
               value={role}
               onChange={(e) => setRole(e.target.value)}
+              placeholder="e.g. Social Media Manager"
               className="w-full h-10 px-3.5 rounded-lg border border-outline-variant bg-surface-container text-sm text-on-surface placeholder:text-on-surface-variant/70 transition-colors focus:outline-none focus:border-on-surface/40 focus:ring-2 focus:ring-ring/10"
-            >
-              <option value="">Select a role</option>
-              {roles.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+            />
+            <datalist id="profile-title-options">
+              {roles.map((r) => <option key={r} value={r} />)}
+            </datalist>
           </div>
 
           {/* Timezone */}

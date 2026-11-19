@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation"
 import { TopBar } from "@/components/top-bar"
 import { OnboardingTour } from "@/components/onboarding-tour"
 import { useStore } from "@/lib/store"
+import { useRefreshData } from "@/components/data-provider"
+import { createClient } from "@/lib/supabase/client"
 
 /**
  * Team members start on the Library when they open the app (once per browser
@@ -29,6 +31,25 @@ function TeamLanding() {
   return null
 }
 
+/**
+ * Scheduled items whose date has come are Published (scripts/017). Runs once
+ * when the app opens; does nothing before that migration has run.
+ */
+function AutoPublish() {
+  const { currentUser } = useStore()
+  const { refreshCampaigns } = useRefreshData()
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    createClient().rpc("publish_due_items").then(({ data, error }) => {
+      if (!cancelled && !error && typeof data === "number" && data > 0) refreshCampaigns()
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id])
+  return null
+}
+
 export function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -36,6 +57,7 @@ export function DashboardLayoutClient({ children }: { children: React.ReactNode 
       <main>{children}</main>
       <OnboardingTour />
       <TeamLanding />
+      <AutoPublish />
     </div>
   )
 }

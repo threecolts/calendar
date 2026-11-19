@@ -3,6 +3,8 @@
 import { Calendar, FileText } from "lucide-react"
 import type { CampaignWithItems } from "@/lib/database.types"
 import { MOTION_ACCENTS, TYPE_ACCENTS, CHANNEL_ICONS, campaignColor, itemChannels } from "@/lib/database.types"
+import { useStore } from "@/lib/store"
+import { Avatar } from "@/components/kit"
 
 interface Props {
   campaign: CampaignWithItems
@@ -17,6 +19,8 @@ interface Props {
 export function CampaignCard({ campaign, onClick }: Props) {
   const motionAccent = MOTION_ACCENTS[campaign.motion] || "#94a3b8"
   const typeAccent   = TYPE_ACCENTS[campaign.type] || "#94a3b8"
+  const { profiles } = useStore()
+  const lead = (campaign.lead_id && profiles.find(p => p.id === campaign.lead_id)) || campaign.lead
   const items   = campaign.items || []
   const total   = items.length
   const done    = items.filter(i => i.status === "Published").length
@@ -55,10 +59,17 @@ export function CampaignCard({ campaign, onClick }: Props) {
             <span className="text-xs text-on-surface-variant font-medium truncate">{campaign.product}</span>
           )}
         </div>
-        <h3 className="flex items-center gap-2 text-base font-semibold text-on-surface leading-snug min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: campaignColor(campaign.id) }} aria-hidden="true" />
-          <span className="truncate">{campaign.title}</span>
-        </h3>
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-on-surface leading-snug min-w-0 flex-1">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: campaignColor(campaign.id) }} aria-hidden="true" />
+            <span className="truncate">{campaign.title}</span>
+          </h3>
+          {lead && (
+            <span title={`Campaign lead: ${lead.full_name}`} className="flex-shrink-0">
+              <Avatar src={lead.avatar_url} name={lead.full_name} size={24} />
+            </span>
+          )}
+        </div>
         {campaign.objective && (
           <p className="text-xs text-on-surface-variant line-clamp-2 leading-relaxed">{campaign.objective}</p>
         )}

@@ -26,7 +26,7 @@ const itemSchema = z.object({
     .enum(["Video", "Short", "Reel", "Post", "Article", "Newsletter", "Thread", "Script", "Edit", "Thumbnail", "Other"])
     .describe("Best-fit content format"),
   channel: z
-    .enum(["YouTube", "Instagram", "LinkedIn", "TikTok", "Blog", "Email", "Twitter/X", "Podcast", "Webinar", "Other"])
+    .enum(["YouTube", "Instagram", "LinkedIn", "TikTok", "Blog", "Email", "Twitter/X", "Facebook", "Website", "Podcast", "Webinar", "Other"])
     .describe("Primary distribution channel"),
   section: z
     .string()

@@ -66,7 +66,7 @@ interface SocialPost {
 
 const PLATFORMS: Platform[] = ["Instagram", "LinkedIn", "X", "Facebook"]
 const CAPTION_LIMITS: Record<Platform, number> = { Instagram: 2200, LinkedIn: 1000, X: 280, Facebook: 600 }
-const SOCIAL_CHANNELS = new Set(["Instagram", "LinkedIn", "Twitter/X", "TikTok", "Other"])
+const SOCIAL_CHANNELS = new Set(["Instagram", "LinkedIn", "Twitter/X", "TikTok", "Facebook", "Other"])
 const isSocial = (i: ContentItem) => itemChannels(i).some(c => SOCIAL_CHANNELS.has(c))
 const FOCUS_PRESETS = [
   { label: "Top", value: "50% 20%" }, { label: "Upper", value: "50% 35%" }, { label: "Centre", value: "50% 50%" },
@@ -87,7 +87,7 @@ const niceDate = (d: string | null) => {
 
 /** Every social account the calendar item is planned for; Instagram + LinkedIn when it names none */
 function defaultPlatforms(channels: readonly string[]): Platform[] {
-  const map: Record<string, Platform> = { Instagram: "Instagram", LinkedIn: "LinkedIn", "Twitter/X": "X" }
+  const map: Record<string, Platform> = { Instagram: "Instagram", LinkedIn: "LinkedIn", "Twitter/X": "X", Facebook: "Facebook" }
   const picked = PLATFORMS.filter(p => channels.some(c => map[c] === p))
   return picked.length ? picked : ["Instagram", "LinkedIn"]
 }

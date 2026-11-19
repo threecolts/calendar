@@ -30,7 +30,7 @@ export function EditMemberDialog({ member, open, onOpenChange, onSaved }: EditMe
   
   const [fullName, setFullName] = useState(member.full_name)
   const [role, setRole] = useState(member.role || "")
-  const { teams } = useStore()
+  const { teams, currentUser, setCurrentUser } = useStore()
   const [teamId, setTeamId] = useState<string>(member.team_id ?? "")
   const [avatarUrl, setAvatarUrl] = useState(member.avatar_url)
   
@@ -73,14 +73,16 @@ export function EditMemberDialog({ member, open, onOpenChange, onSaved }: EditMe
     setError("")
     
     try {
-      await updateProfileClient(member.id, {
+      const updated = await updateProfileClient(member.id, {
         full_name: fullName.trim(),
-        role: role.trim() || "Team Member",
+        role: role.trim(),
         avatar_url: avatarUrl || null,
         // Only once teams exist (scripts/012), so saving still works before then
         ...(teams.length ? { team_id: teamId || null } : {}),
       })
       
+      // Your own row: the top bar picks it up straight away
+      if (updated.id === currentUser?.id) setCurrentUser(updated)
       setSaved(true)
       setTimeout(() => {
         setSaved(false)

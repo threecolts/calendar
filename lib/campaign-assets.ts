@@ -27,6 +27,8 @@ export interface CampaignAsset {
   sort_order: number
   created_by: string | null
   created_at: string
+  /** The calendar item it belongs to (scripts/017), if any */
+  item_id?: string | null
   /** Signed URL for files (1 hour) */
   src?: string | null
 }
@@ -54,6 +56,29 @@ export async function listAssets(campaignId: string): Promise<CampaignAsset[]> {
   return rows
 }
 
+/** Files attached to one calendar item; [] before scripts/017 */
+export async function listItemAssets(itemId: string): Promise<CampaignAsset[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("campaign_assets").select("*").eq("item_id", itemId).order("created_at", { ascending: false })
+  if (error) return []
+  const rows = (data ?? []) as CampaignAsset[]
+  const paths = rows.map(r => r.path).filter((p): p is string => !!p)
+  if (paths.length) {
+    const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 60 * 60)
+    const map = new Map((signed ?? []).map(s => [s.path, s.signedUrl]))
+    for (const r of rows) if (r.path) r.src = map.get(r.path) ?? null
+  }
+  return rows
+}
+
+/** Which Assets section an item's file goes in, from the item's channel and format */
+export function sectionForItem(item: { channel: string; format: string }): AssetSection {
+  if (["Video", "Short", "Reel", "Edit"].includes(item.format) || item.channel === "YouTube") return "video"
+  if (["Instagram", "LinkedIn", "TikTok", "Facebook", "Twitter/X"].includes(item.channel)) return "social"
+  return "design"
+}
+
 /** Assets across many campaigns (the Library); [] if 013 hasn't run */
 export async function listAssetsForCampaigns(campaignIds: string[], sections: AssetSection[]): Promise<CampaignAsset[]> {
   if (!campaignIds.length) return []
@@ -72,7 +97,7 @@ export async function listAssetsForCampaigns(campaignIds: string[], sections: As
   return rows
 }
 
-export async function uploadAsset(campaignId: string, section: AssetSection, file: File, userId: string | null) {
+export async function uploadAsset(campaignId: string, section: AssetSection, file: File, userId: string | null, itemId?: string) {
   const supabase = createClient()
   const safe = file.name.replace(/[^\w.\-]+/g, "-").slice(-80)
   const path = `${campaignId}/${section}/${Date.now()}-${safe}`
@@ -86,6 +111,7 @@ export async function uploadAsset(campaignId: string, section: AssetSection, fil
   const { error } = await supabase.from("campaign_assets").insert({
     campaign_id: campaignId, section, kind: "file", path,
     title: file.name.replace(/\.[^.]+$/, ""), mime_type: file.type || null, size_bytes: file.size, created_by: userId,
+    ...(itemId ? { item_id: itemId } : {}),
   })
   if (error) { await supabase.storage.from(BUCKET).remove([path]); throw error }
 }

@@ -125,7 +125,10 @@ export function StoreProvider({
     return ids
   }, [activeTeam, teams])
 
-  const inTeamView = useCallback((teamId: string | null | undefined) => !scope || (!!teamId && scope.has(teamId)), [scope])
+  /** A top-level team's view (Marketing) also holds shared work: items made before teams existed */
+  const sharedInView = useMemo(() => !!scope && teams.some(t => !t.parent_id && scope.has(t.id)), [scope, teams])
+  const inTeamView = useCallback((teamId: string | null | undefined) =>
+    !scope || (teamId ? scope.has(teamId) : sharedInView), [scope, sharedInView])
 
   /** Your team and every team above it: the work you may change */
   const myTeams = useMemo(() => {

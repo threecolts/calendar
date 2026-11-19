@@ -55,6 +55,8 @@ export type ContentChannel =
   | "Blog"
   | "Email"
   | "Twitter/X"
+  | "Facebook"
+  | "Website"
   | "Podcast"
   | "Webinar"
   | "Other"
@@ -235,6 +237,8 @@ export const CHANNEL_ICONS: Record<string, string> = {
   Blog:      "✍",
   Email:     "✉",
   "Twitter/X": "𝕏",
+  Facebook:  "f",
+  Website:   "◍",
   Podcast:   "◉",
   Webinar:   "⊙",
   Other:     "·",
@@ -253,6 +257,8 @@ export const CHANNEL_COLORS: Record<string, string> = {
   LinkedIn:    "#0a66c2",
   TikTok:      "#fe2c55",
   "Twitter/X": "#0f1419",
+  Facebook:    "#0866ff",
+  Website:     "#4338ca",
   Blog:        "#15803d",
   Email:       "#b45309",
   Podcast:     "#8b2fc9",
@@ -297,7 +303,7 @@ export const TYPE_OPTIONS: CampaignType[] = ["Pillar", "Launch", "Always-on"]
 export const MOTION_OPTIONS: CampaignMotion[] = ["SMB", "Enterprise", "Both", "Retention"]
 
 export const CHANNEL_OPTIONS: ContentChannel[] = [
-  "YouTube", "Instagram", "LinkedIn", "TikTok", "Blog", "Email", "Twitter/X", "Podcast", "Webinar", "Other",
+  "YouTube", "Instagram", "LinkedIn", "TikTok", "Facebook", "Twitter/X", "Blog", "Website", "Email", "Podcast", "Webinar", "Other",
 ]
 
 export const FORMAT_OPTIONS: ContentFormat[] = [

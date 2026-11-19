@@ -24,6 +24,8 @@ import {
   NO_CAMPAIGN_ID, AUDIENCE_SEGMENT_GROUPS, campaignColor, itemChannels, channelFields,
 } from "@/lib/database.types"
 import { ChannelIcon } from "@/components/channel-icon"
+import { defaultOwnerId } from "@/lib/default-owner"
+import { ItemAssets } from "@/components/item-assets"
 
 const NEW_CAMPAIGN_OPTION = "__new_campaign__"
 
@@ -134,6 +136,17 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [comments])
+
+  // New Brand work gets its usual owner (social/blog → Angela, video → Lionel,
+  // website → Monika) until someone picks an owner by hand
+  const [ownerPicked, setOwnerPicked] = useState(false)
+  const brandTeamId = teams.find(t => t.name.toLowerCase() === "brand")?.id ?? null
+  const effectiveTeam = teamId || allCampaigns.find(c => c.id === campaignId)?.team_id || null
+  useEffect(() => {
+    if (!isNew || ownerPicked || !brandTeamId || effectiveTeam !== brandTeamId) return
+    const id = defaultOwnerId(form.channels[0], form.format, profiles)
+    setForm(prev => (prev.assignee_id === id ? prev : { ...prev, assignee_id: id }))
+  }, [isNew, ownerPicked, brandTeamId, effectiveTeam, form.channels, form.format, profiles])
 
   if (!open) return null
 
@@ -456,7 +469,7 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>Owner</FieldLabel>
                   {isEditor ? (
-                    <select value={form.assignee_id ?? "none"} onChange={e => f("assignee_id", e.target.value === "none" ? null : e.target.value)} className={selectCls()}>
+                    <select value={form.assignee_id ?? "none"} onChange={e => { setOwnerPicked(true); f("assignee_id", e.target.value === "none" ? null : e.target.value) }} className={selectCls()}>
                       <option value="none">Unassigned</option>
                       {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
                     </select>
@@ -603,6 +616,14 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
                   </div>
                 ))}
               </div>
+
+              {/* Assets: Social renders and uploaded files (also on the campaign's Assets page) */}
+              {item && (
+                <ItemAssets
+                  item={{ id: item.id, title: item.title, publish_date: item.publish_date, campaign_id: item.campaign_id, channel: item.channel, format: item.format }}
+                  editable={isEditor && canEditAnything}
+                />
+              )}
             </div>
           )}
 
