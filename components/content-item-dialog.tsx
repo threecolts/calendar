@@ -224,7 +224,9 @@ export function ContentItemDialog({ item, open, onOpenChange, defaultDate, defau
       handleClose()
     } catch (e) {
       const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? ""
-      setError(/channels/.test(msg)
+      setError(/channels_check|channel_check/.test(msg)
+        ? "That channel isn't allowed by the database yet (run the latest script in scripts/). Pick another channel for now."
+        : /channels/.test(msg) && /(column|schema cache)/i.test(msg)
         ? "Several channels per item need a database update (scripts/011_item_channels.sql) that hasn't been run yet. Pick one channel for now."
         : msg || "Failed to save item")
     } finally {
